@@ -3,13 +3,15 @@ class_name TrackCenterLine
 
 ## Loads the authored racing-line curve for a track, ported from the original
 ## section->center chain that ship_ai.c follows (see ship_ai_update_race()).
-## The Blender export pipeline currently can't preserve curve/spline data
-## through glTF (a Blender Curve object with no mesh becomes an empty
-## transform node), so source_scene is checked for a usable Path3D and, if
-## none is found, a straight placeholder curve is generated instead so the
-## rest of the AI pipeline stays functional until the real spline is exported
-## (e.g. by converting the curve to a mesh/polyline in Blender before export).
+## Blender's glTF export can't preserve Curve objects (a curve with no bevel/
+## extrude becomes an empty transform node on export), so the primary source
+## is a JSON file of world-space points sampled directly from the .blend file
+## by godot/tools/blender/export_track_curve.py. source_scene is kept as a
+## secondary source in case a track ever exports its curve as a real Path3D/
+## mesh. If neither is usable, a straight placeholder curve is generated so
+## the rest of the AI pipeline stays functional.
 
+@export_file("*.json") var source_json: String = ""
 @export var source_scene: PackedScene
 @export var placeholder_length: float = 100.0
 
@@ -18,14 +20,40 @@ func _ready() -> void:
 	if curve and curve.point_count >= 2:
 		return
 
+	if source_json != "":
+		var loaded := _load_curve_from_json(source_json)
+		if loaded:
+			curve = loaded
+			return
+
 	if source_scene:
 		var extracted := _extract_curve_from_scene(source_scene)
 		if extracted:
 			curve = extracted
 			return
 
-	push_warning("TrackCenterLine (%s): no usable curve found in source_scene, using a straight placeholder. Re-export the Blender curve (e.g. Convert To > Mesh) so it survives the glTF import." % name)
+	push_warning("TrackCenterLine (%s): no usable curve found, using a straight placeholder. Run godot/tools/blender/export_track_curve.py against the track's .blend file to generate source_json." % name)
 	curve = _build_placeholder_curve()
+
+
+func _load_curve_from_json(path: String) -> Curve3D:
+	if not FileAccess.file_exists(path):
+		return null
+
+	var file := FileAccess.open(path, FileAccess.READ)
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	if typeof(parsed) != TYPE_DICTIONARY or not parsed.has("points"):
+		return null
+
+	var raw_points: Array = parsed["points"]
+	if raw_points.size() < 2:
+		return null
+
+	var result := Curve3D.new()
+	for p in raw_points:
+		result.add_point(Vector3(p[0], p[1], p[2]))
+	result.closed = bool(parsed.get("closed", false))
+	return result
 
 
 func _extract_curve_from_scene(scene: PackedScene) -> Curve3D:

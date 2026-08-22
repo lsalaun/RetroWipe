@@ -10,7 +10,8 @@
 
 [node name="CenterLine" type="Path3D" parent="."]
 script = ExtResource("3_script")
+source_json = "res://assets/tracks/Track_01/track_12_curve.json"
 source_scene = ExtResource("2_curve")
 
 [node name="ShipSpawn" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -260, 2.8, -105)
+transform = Transform3D(-0.714723, 0, 0.699408, 0, 1, 0, -0.699408, 0, -0.714723, -233.3237, 3.139844, -48.37043)

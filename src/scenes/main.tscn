@@ -37,12 +37,12 @@ shadow_enabled = true
 [node name="Track01" parent="." instance=ExtResource("3_track")]
 
 [node name="Ship" parent="." unique_id=1149031679 instance=ExtResource("1_ship")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -260, 2.8, -105)
+transform = Transform3D(-0.714723, 0, 0.699408, 0, 1, 0, -0.699408, 0, -0.714723, -233.3237, 3.139844, -48.37043)
 
 [node name="ShipAI1" parent="." instance=ExtResource("2_ship_ai")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -254, 2.8, -105)
+transform = Transform3D(-0.714723, 0, 0.699408, 0, 1, 0, -0.699408, 0, -0.714723, -235.468, 3.139844, -46.272)
 lane_offset = 3.0
 
 [node name="ShipAI2" parent="." instance=ExtResource("2_ship_ai")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -266, 2.8, -105)
+transform = Transform3D(-0.714723, 0, 0.699408, 0, 1, 0, -0.699408, 0, -0.714723, -231.179, 3.139844, -50.469)
 lane_offset = -3.0

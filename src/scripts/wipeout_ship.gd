@@ -12,20 +12,24 @@ class HoverSample:
 @export var hover_height: float = 2.2
 @export var hover_force: float = 54.0
 @export var hover_damping: float = 10.0
+@export var track_magnet: float = 1.0 # ported from SHIP_TRACK_MAGNET: inverse-height repulsion, pulls back down when above hover_height
 @export var gravity: float = 34.0
 @export var thrust_max: float = 70.0
 @export var thrust_ramp: float = 40.0
-@export var thrust_falloff: float = 28.0
+@export var thrust_falloff: float = 20.0 # original ramps thrust down at half the ramp-up rate (SHIP_THRUST_FALLOFF = SHIP_THRUST_RATE / 2)
 @export var planar_drag: float = 0.075
 @export var lateral_friction: float = 3.8
 @export var airborne_lateral_friction: float = 0.6
 @export var turn_accel: float = 3.1
+@export var turn_reverse_boost: float = 2.0 # ported: counter-steering (opposing current yaw) accelerates at double rate for quick flick-turns
 @export var turn_damping: float = 4.0
 @export var turn_max: float = 2.45
 @export var turn_air_control: float = 0.4
 @export var airbrake_rate: float = 5.0
 @export var airbrake_drag: float = 18.0
 @export var airbrake_turn_factor: float = 0.028
+@export var roll_yaw_gain: float = 0.6 # ported from angular_acceleration.z += (angular_velocity.y - 0.5 * angular_velocity.z)
+@export var roll_spring_damping: float = 3.0
 @export var align_speed: float = 7.5
 @export var camera_distance: float = 11.0
 @export var camera_height: float = 3.8
@@ -50,6 +54,7 @@ var brake_right: float = 0.0
 var yaw_velocity: float = 0.0
 var airborne_time: float = 0.0
 var visual_roll: float = 0.0
+var roll_rate: float = 0.0
 var visual_pitch: float = 0.0
 var desired_forward: Vector3 = Vector3.FORWARD
 var last_ground_normal: Vector3 = Vector3.UP
@@ -141,11 +146,14 @@ func _sample_hover() -> HoverSample:
 
 func _apply_hover_forces(hover: HoverSample, up: Vector3, grounded: bool, delta: float) -> void:
 	if grounded:
+		# Ported from SHIP_TRACK_MAGNET: repulsion = magnet * (float_height / height - 1).
+		# Grows sharply as height -> 0 and turns into a gentle downward pull above hover_height,
+		# instead of the original hard clamp-based compression spring.
 		var vertical_speed := velocity.dot(up)
-		var lift: float = hover.compression * hover_force - vertical_speed * hover_damping
-		var height_error := hover_height * 0.55 - hover.height
-		velocity += up * lift * delta
-		velocity += up * height_error * hover_force * 0.45 * delta
+		var height := maxf(hover.height, 0.05)
+		var repulsion := clampf(track_magnet * (hover_height / height - 1.0) * hover_force, -hover_force * 2.0, hover_force * 6.0)
+		velocity += up * repulsion * delta
+		velocity -= up * vertical_speed * hover_damping * delta
 		velocity += Vector3.DOWN * gravity * 0.35 * delta
 	else:
 		velocity += Vector3.DOWN * gravity * delta
@@ -171,8 +179,13 @@ func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded
 		velocity -= forward * minf(forward_speed, airbrake_drag * brake_sum * delta)
 		yaw_velocity += brake_bias * maxf(planar_velocity.length(), 0.0) * airbrake_turn_factor * delta
 
+	# Ported from ship_player.c: steering that opposes the current yaw rate (a quick
+	# counter-steer flick) accelerates at double rate instead of the normal ramp.
 	var steer_accel := turn_accel if grounded else turn_accel * turn_air_control
-	yaw_velocity -= steer * steer_accel * delta
+	if absf(steer) > 0.01:
+		var opposing := (steer > 0.0 and yaw_velocity > 0.0) or (steer < 0.0 and yaw_velocity < 0.0)
+		var accel_scale := turn_reverse_boost if opposing else 1.0
+		yaw_velocity -= steer * steer_accel * accel_scale * delta
 	yaw_velocity = clampf(yaw_velocity, -turn_max, turn_max)
 
 	if absf(steer) < 0.01 and absf(brake_bias) < 0.01:
@@ -211,13 +224,19 @@ func _update_orientation(up: Vector3, pitch_input: float, grounded: bool, delta:
 
 func _update_visuals(steer: float, pitch_input: float, grounded: bool, delta: float) -> void:
 	var brake_roll := (brake_left - brake_right) * 0.3
-	var target_roll := clampf((-steer * 0.55) + brake_roll + yaw_velocity * -0.18, -0.65, 0.65)
+	var bank_target := clampf((-steer * 0.55) + brake_roll, -0.65, 0.65)
 	var target_pitch := clampf((pitch_input * 0.12) - (velocity.length() * 0.0025), -0.2, 0.18)
 
 	if not grounded:
 		target_pitch -= 0.1
 
-	visual_roll = lerpf(visual_roll, target_roll, minf(1.0, 6.0 * delta))
+	# Spring-damped bank, ported from ship_player.c's roll model:
+	# angular_acceleration.z += (angular_velocity.y - 0.5 * angular_velocity.z), then
+	# angle.z self-levels back to 0 each frame. The direct steer/brake lean acts as the
+	# spring's target and yaw_velocity adds the same automatic banking torque.
+	var roll_accel := (bank_target - visual_roll) * 6.0 + roll_yaw_gain * yaw_velocity - roll_spring_damping * roll_rate
+	roll_rate += roll_accel * delta
+	visual_roll = clampf(visual_roll + roll_rate * delta, -0.75, 0.75)
 	visual_pitch = lerpf(visual_pitch, target_pitch, minf(1.0, 4.0 * delta))
 	body_mesh.rotation = Vector3(visual_pitch, 0.0, visual_roll)
 
@@ -252,6 +271,8 @@ func _reset_to_spawn() -> void:
 	brake_left = 0.0
 	brake_right = 0.0
 	yaw_velocity = 0.0
+	roll_rate = 0.0
+	visual_roll = 0.0
 	airborne_time = 0.0
 	desired_forward = -spawn_transform.basis.z
 

@@ -10,27 +10,27 @@ class HoverSample:
 	var height: float = 0.0
 
 @export var hover_height: float = 2.2
-@export var hover_force: float = 54.0
-@export var hover_damping: float = 10.0
-@export var track_magnet: float = 1.0 # ported from SHIP_TRACK_MAGNET: inverse-height repulsion, pulls back down when above hover_height
+@export var hover_force: float = 46.0
+@export var hover_damping: float = 12.0
+@export var track_magnet: float = 0.9 # ported from SHIP_TRACK_MAGNET: inverse-height repulsion, pulls back down when above hover_height
 @export var gravity: float = 34.0
 @export var thrust_max: float = 70.0
 @export var thrust_ramp: float = 40.0
 @export var thrust_falloff: float = 20.0 # original ramps thrust down at half the ramp-up rate (SHIP_THRUST_FALLOFF = SHIP_THRUST_RATE / 2)
 @export var planar_drag: float = 0.075
-@export var lateral_friction: float = 3.8
-@export var airborne_lateral_friction: float = 0.6
-@export var turn_accel: float = 3.1
+@export var lateral_friction: float = 4.5
+@export var airborne_lateral_friction: float = 0.7
+@export var turn_accel: float = 5.8
 @export var turn_reverse_boost: float = 2.0 # ported: counter-steering (opposing current yaw) accelerates at double rate for quick flick-turns
-@export var turn_damping: float = 4.0
-@export var turn_max: float = 2.45
-@export var turn_air_control: float = 0.4
+@export var turn_damping: float = 3.2
+@export var turn_max: float = 3.8
+@export var turn_air_control: float = 0.6
 @export var airbrake_rate: float = 5.0
 @export var airbrake_drag: float = 18.0
 @export var airbrake_turn_factor: float = 0.028
-@export var roll_yaw_gain: float = 0.6 # ported from angular_acceleration.z += (angular_velocity.y - 0.5 * angular_velocity.z)
+@export var roll_yaw_gain: float = 0.8 # ported from angular_acceleration.z += (angular_velocity.y - 0.5 * angular_velocity.z)
 @export var roll_spring_damping: float = 3.0
-@export var align_speed: float = 7.5
+@export var align_speed: float = 10.5
 @export var camera_distance: float = 11.0
 @export var camera_height: float = 3.8
 @export var camera_follow_speed: float = 6.0
@@ -39,6 +39,7 @@ class HoverSample:
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
 @export var is_player_controlled: bool = true
+@export var handling: Resource
 
 @onready var hover_points: Array[RayCast3D] = [
 	$HoverFrontLeft,
@@ -63,6 +64,8 @@ var spawn_transform: Transform3D
 
 
 func _ready() -> void:
+	if handling != null and handling.has_method("apply_to"):
+		handling.call("apply_to", self)
 	spawn_transform = global_transform
 	desired_forward = -global_transform.basis.z
 	last_ground_normal = Vector3.UP

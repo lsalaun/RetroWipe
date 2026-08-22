@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="ShipHandlingProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ship_handling_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+hover_height = 2.0
+hover_force = 60.0
+hover_damping = 10.5
+track_magnet = 1.05
+gravity = 34.0
+thrust_max = 78.0
+thrust_ramp = 46.0
+thrust_falloff = 24.0
+planar_drag = 0.065
+lateral_friction = 5.2
+airborne_lateral_friction = 0.75
+turn_accel = 7.0
+turn_reverse_boost = 2.5
+turn_damping = 3.4
+turn_max = 4.3
+turn_air_control = 0.72
+airbrake_rate = 5.6
+airbrake_drag = 20.0
+airbrake_turn_factor = 0.032
+roll_yaw_gain = 1.0
+roll_spring_damping = 2.7
+align_speed = 13.0
+camera_distance = 10.5
+camera_height = 3.6
+camera_follow_speed = 6.8
+wall_bounce_damping = 0.48
+wall_turn_kick = 1.1
+rescue_delay = 2.0
+rescue_height = 3.8

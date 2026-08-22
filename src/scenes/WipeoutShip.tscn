@@ -1,6 +1,7 @@
 [gd_scene load_steps=7 format=3 uid="uid://cntc2pxmd03rx"]
 
 [ext_resource type="Script" path="res://scripts/wipeout_ship.gd" id="1_script"]
+[ext_resource type="Resource" path="res://resources/handling/default_profile.tres" id="resource_handling"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1.7, 0.9, 3.8)
@@ -24,6 +25,7 @@ roughness = 0.4
 
 [node name="WipeoutShip" type="CharacterBody3D"]
 script = ExtResource("1_script")
+handling = ExtResource("resource_handling")
 floor_stop_on_slope = false
 safe_margin = 0.05
 

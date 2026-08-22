@@ -172,7 +172,7 @@ func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded
 		yaw_velocity += brake_bias * maxf(planar_velocity.length(), 0.0) * airbrake_turn_factor * delta
 
 	var steer_accel := turn_accel if grounded else turn_accel * turn_air_control
-	yaw_velocity += steer * steer_accel * delta
+	yaw_velocity -= steer * steer_accel * delta
 	yaw_velocity = clampf(yaw_velocity, -turn_max, turn_max)
 
 	if absf(steer) < 0.01 and absf(brake_bias) < 0.01:
@@ -190,7 +190,7 @@ func _handle_wall_collisions() -> void:
 			continue
 
 		velocity = velocity.bounce(normal) * wall_bounce_damping
-		yaw_velocity += signf(normal.dot(global_transform.basis.x)) * wall_turn_kick
+		yaw_velocity -= signf(normal.dot(global_transform.basis.x)) * wall_turn_kick
 		break
 
 
@@ -210,7 +210,7 @@ func _update_orientation(up: Vector3, pitch_input: float, grounded: bool, delta:
 
 
 func _update_visuals(steer: float, pitch_input: float, grounded: bool, delta: float) -> void:
-	var brake_roll := (brake_right - brake_left) * 0.3
+	var brake_roll := (brake_left - brake_right) * 0.3
 	var target_roll := clampf((-steer * 0.55) + brake_roll + yaw_velocity * -0.18, -0.65, 0.65)
 	var target_pitch := clampf((pitch_input * 0.12) - (velocity.length() * 0.0025), -0.2, 0.18)
 

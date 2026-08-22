@@ -16,6 +16,7 @@ func _ensure_input_map_defaults() -> Dictionary:
 		_key_event(KEY_W),
 		_joypad_motion_event(JOY_AXIS_LEFT_Y, -1.0),
 		_joypad_motion_event(JOY_AXIS_TRIGGER_RIGHT, 1.0),
+		_joypad_button_event(JOY_BUTTON_A), # south face button: Xbox "A" / PlayStation "X" (Cross)
 	])
 	serialized_actions[String(&"ship_reverse")] = _ensure_action(&"ship_reverse", 0.2, [
 		_key_event(KEY_S),

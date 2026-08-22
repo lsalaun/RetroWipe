@@ -1,0 +1,68 @@
+[gd_scene load_steps=7 format=3 uid="uid://c85gqx0hk3vqd"]
+
+[ext_resource type="Script" path="res://scripts/wipeout_ship_ai.gd" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_1"]
+size = Vector3(1.7, 0.9, 3.8)
+
+[sub_resource type="BoxMesh" id="BoxMesh_1"]
+size = Vector3(1.8, 0.45, 3.6)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+albedo_color = Color(0.905882, 0.596078, 0.145098, 1)
+metallic = 0.35
+roughness = 0.28
+emission_enabled = true
+emission = Color(0.541176, 0.32549, 0.0313726, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_2"]
+size = Vector3(1, 0.18, 1.2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2"]
+albedo_color = Color(0.301961, 0.301961, 0.301961, 1)
+roughness = 0.4
+
+[node name="WipeoutShipAI" type="CharacterBody3D"]
+script = ExtResource("1_script")
+floor_stop_on_slope = false
+safe_margin = 0.05
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_1")
+
+[node name="BodyMesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_1")
+surface_material_override/0 = SubResource("StandardMaterial3D_1")
+
+[node name="Canopy" type="MeshInstance3D" parent="BodyMesh"]
+transform = Transform3D(0.8, 0, 0, 0, 1, 0, 0, 0, 0.35, 0, 0.22, 0.15)
+mesh = SubResource("BoxMesh_2")
+surface_material_override/0 = SubResource("StandardMaterial3D_2")
+
+[node name="HoverFrontLeft" type="RayCast3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.75, 0, -1.35)
+target_position = Vector3(0, -3, 0)
+enabled = true
+
+[node name="HoverFrontRight" type="RayCast3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.75, 0, -1.35)
+target_position = Vector3(0, -3, 0)
+enabled = true
+
+[node name="HoverRearLeft" type="RayCast3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.75, 0, 1.15)
+target_position = Vector3(0, -3, 0)
+enabled = true
+
+[node name="HoverRearRight" type="RayCast3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.75, 0, 1.15)
+target_position = Vector3(0, -3, 0)
+enabled = true
+
+[node name="CameraRig" type="Node3D" parent="."]
+top_level = true
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+fov = 82.0
+near = 0.05
+far = 400.0

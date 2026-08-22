@@ -1,6 +1,9 @@
 [gd_scene format=3 uid="uid://cikx2kwm2gdx"]
 
 [ext_resource type="PackedScene" uid="uid://cntc2pxmd03rx" path="res://scenes/WipeoutShip.tscn" id="1_ship"]
+[ext_resource type="PackedScene" path="res://scenes/WipeoutShipAI.tscn" id="2_ship_ai"]
+[ext_resource type="PackedScene" path="res://scenes/Track01.tscn" id="3_track"]
+[ext_resource type="Script" path="res://scripts/main.gd" id="4_script"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.0862745, 0.129412, 0.239216, 1)
@@ -20,30 +23,8 @@ ambient_light_energy = 0.8
 tonemap_mode = 2
 glow_enabled = true
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
-size = Vector3(140, 2, 240)
-
-[sub_resource type="BoxMesh" id="BoxMesh_floor"]
-size = Vector3(140, 2, 240)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
-albedo_color = Color(0.168627, 0.188235, 0.243137, 1)
-metallic = 0.1
-roughness = 0.75
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_wall"]
-size = Vector3(2, 5, 240)
-
-[sub_resource type="BoxMesh" id="BoxMesh_wall"]
-size = Vector3(2, 5, 240)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wall"]
-albedo_color = Color(0.905882, 0.321569, 0.247059, 1)
-roughness = 0.55
-emission_enabled = true
-emission = Color(0.717647, 0.211765, 0.145098, 1)
-
 [node name="Main" type="Node3D" unique_id=1322351224]
+script = ExtResource("4_script")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1258542334]
 environment = SubResource("Environment_1")
@@ -53,35 +34,15 @@ transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0
 light_energy = 2.0
 shadow_enabled = true
 
-[node name="Floor" type="StaticBody3D" parent="." unique_id=622265426]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 40)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor" unique_id=190595321]
-shape = SubResource("BoxShape3D_floor")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor" unique_id=977961938]
-mesh = SubResource("BoxMesh_floor")
-surface_material_override/0 = SubResource("StandardMaterial3D_floor")
-
-[node name="LeftWall" type="StaticBody3D" parent="." unique_id=466729015]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 1.5, 40)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="LeftWall" unique_id=587474617]
-shape = SubResource("BoxShape3D_wall")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="LeftWall" unique_id=1935446112]
-mesh = SubResource("BoxMesh_wall")
-surface_material_override/0 = SubResource("StandardMaterial3D_wall")
-
-[node name="RightWall" type="StaticBody3D" parent="." unique_id=1215186829]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 1.5, 40)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="RightWall" unique_id=1380492788]
-shape = SubResource("BoxShape3D_wall")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="RightWall" unique_id=850409863]
-mesh = SubResource("BoxMesh_wall")
-surface_material_override/0 = SubResource("StandardMaterial3D_wall")
+[node name="Track01" parent="." instance=ExtResource("3_track")]
 
 [node name="Ship" parent="." unique_id=1149031679 instance=ExtResource("1_ship")]
-transform = Transform3D(0.99994785, 0, 0.010206282, 0, 1, 0, -0.010206282, 0, 0.99994785, 0, 2.5, -50)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -260, 2.8, -105)
+
+[node name="ShipAI1" parent="." instance=ExtResource("2_ship_ai")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -254, 2.8, -105)
+lane_offset = 3.0
+
+[node name="ShipAI2" parent="." instance=ExtResource("2_ship_ai")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -266, 2.8, -105)
+lane_offset = -3.0

@@ -38,6 +38,7 @@ class HoverSample:
 @export var wall_turn_kick: float = 0.9
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
+@export var is_player_controlled: bool = true
 
 @onready var hover_points: Array[RayCast3D] = [
 	$HoverFrontLeft,
@@ -72,11 +73,12 @@ func _physics_process(delta: float) -> void:
 		_reset_to_spawn()
 		return
 
-	var throttle := Input.get_axis(&"ship_reverse", &"ship_thrust")
-	var steer := Input.get_axis(&"ship_steer_left", &"ship_steer_right")
-	var pitch_input := Input.get_axis(&"ship_pitch_down", &"ship_pitch_up")
-	var wants_left_brake := Input.is_action_pressed(&"ship_airbrake_left")
-	var wants_right_brake := Input.is_action_pressed(&"ship_airbrake_right")
+	var inputs := _gather_inputs()
+	var throttle: float = inputs.throttle
+	var steer: float = inputs.steer
+	var pitch_input: float = inputs.pitch
+	var wants_left_brake: bool = inputs.brake_left
+	var wants_right_brake: bool = inputs.brake_right
 
 	_update_drive_inputs(throttle, wants_left_brake, wants_right_brake, delta)
 
@@ -97,10 +99,25 @@ func _physics_process(delta: float) -> void:
 	_handle_wall_collisions()
 	_update_orientation(up, pitch_input, grounded, delta)
 	_update_visuals(steer, pitch_input, grounded, delta)
-	_update_camera(up, delta)
+	if is_player_controlled:
+		_update_camera(up, delta)
 
 	if airborne_time > rescue_delay:
 		_reset_to_spawn()
+
+
+## Returns the frame's control inputs as a Dictionary with keys:
+## throttle, steer, pitch, brake_left, brake_right.
+## Overridden by AI ships to drive the same physics from path-following logic
+## instead of the Input singleton.
+func _gather_inputs() -> Dictionary:
+	return {
+		"throttle": Input.get_axis(&"ship_reverse", &"ship_thrust"),
+		"steer": Input.get_axis(&"ship_steer_left", &"ship_steer_right"),
+		"pitch": Input.get_axis(&"ship_pitch_down", &"ship_pitch_up"),
+		"brake_left": Input.is_action_pressed(&"ship_airbrake_left"),
+		"brake_right": Input.is_action_pressed(&"ship_airbrake_right"),
+	}
 
 
 func _update_drive_inputs(throttle: float, wants_left_brake: bool, wants_right_brake: bool, delta: float) -> void:
@@ -282,4 +299,4 @@ func _get_axis(positive: Key, negative: Key) -> float:
 
 
 func _wants_reset() -> bool:
-	return Input.is_action_pressed(&"ship_reset")
+	return is_player_controlled and Input.is_action_pressed(&"ship_reset")

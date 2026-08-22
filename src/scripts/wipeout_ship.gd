@@ -66,6 +66,15 @@ func _ready() -> void:
 	spawn_transform = global_transform
 	desired_forward = -global_transform.basis.z
 	last_ground_normal = Vector3.UP
+	_snap_camera_to_ship()
+
+
+## CameraRig has top_level = true so it doesn't inherit the ship's transform;
+## without this it starts at the world origin and visibly lerps in over ~1s.
+func _snap_camera_to_ship() -> void:
+	var forward := -global_transform.basis.z
+	camera_rig.global_position = global_position - forward * camera_distance + global_transform.basis.y * camera_height
+	camera_rig.look_at(global_position + forward * 10.0 + global_transform.basis.y * 1.2, Vector3.UP)
 
 
 func _physics_process(delta: float) -> void:

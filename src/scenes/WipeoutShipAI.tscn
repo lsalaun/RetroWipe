@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://c85gqx0hk3vqd"]
+[gd_scene format=3 uid="uid://c85gqx0hk3vqd"]
 
 [ext_resource type="Script" path="res://scripts/wipeout_ship_ai.gd" id="1_script"]
 

@@ -52,7 +52,14 @@ func _load_curve_from_json(path: String) -> Curve3D:
 	var result := Curve3D.new()
 	for p in raw_points:
 		result.add_point(Vector3(p[0], p[1], p[2]))
-	result.closed = bool(parsed.get("closed", false))
+
+	var is_loop := bool(parsed.get("closed", false))
+	if not is_loop and raw_points.size() >= 2:
+		var first := Vector3(raw_points[0][0], raw_points[0][1], raw_points[0][2])
+		var last := Vector3(raw_points[-1][0], raw_points[-1][1], raw_points[-1][2])
+		is_loop = first.distance_to(last) < 0.1
+
+	result.closed = is_loop
 	return result
 
 

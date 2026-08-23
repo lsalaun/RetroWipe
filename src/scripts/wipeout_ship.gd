@@ -8,10 +8,15 @@ class HoverSample:
 	var normal: Vector3 = Vector3.UP
 	var compression: float = 0.0
 	var height: float = 0.0
+	var nose_height: float = 0.0
 
 @export var hover_height: float = 2.2
 @export var hover_force: float = 46.0
 @export var hover_damping: float = 12.0
+@export var bounce_restitution: float = 0.875 # ported from ship_player.c hard-bounce velocity reflection attenuation
+@export var bounce_margin: float = 0.4 # height below which a soft floor push kicks in, ahead of the hard bounce at height <= 0
+@export var nose_pitch_gain: float = 1.4 # ported from ship_player.c:370-377: pitch torque driven by nose/hull height difference
+@export var nose_pitch_max: float = 2.0
 @export var track_magnet: float = 0.9 # ported from SHIP_TRACK_MAGNET: inverse-height repulsion, pulls back down when above hover_height
 @export var gravity: float = 34.0
 @export var thrust_max: float = 70.0
@@ -60,6 +65,7 @@ var reverse_brake: float = 0.0
 var brake_left: float = 0.0
 var brake_right: float = 0.0
 var yaw_velocity: float = 0.0
+var pitch_velocity: float = 0.0
 var airborne_time: float = 0.0
 var visual_roll: float = 0.0
 var roll_rate: float = 0.0
@@ -115,7 +121,7 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_handle_wall_collisions()
-	_update_orientation(up, pitch_input, grounded, delta)
+	_update_orientation(hover, up, pitch_input, grounded, delta)
 	_update_visuals(steer, pitch_input, grounded, delta)
 	if is_player_controlled:
 		_update_camera(up, delta)
@@ -161,8 +167,11 @@ func _sample_hover() -> HoverSample:
 	var normal := Vector3.ZERO
 	var compression_sum := 0.0
 	var height_sum := 0.0
+	var nose_hit_count := 0
+	var nose_height_sum := 0.0
 
-	for ray in hover_points:
+	for index in hover_points.size():
+		var ray := hover_points[index]
 		if not ray.is_colliding():
 			continue
 
@@ -171,6 +180,10 @@ func _sample_hover() -> HoverSample:
 		var hit_distance := ray.global_position.distance_to(ray.get_collision_point())
 		height_sum += hit_distance
 		compression_sum += clampf(1.0 - hit_distance / hover_height, -1.0, 1.0)
+
+		if index < 2: # HoverFrontLeft / HoverFrontRight approximate the nose height
+			nose_hit_count += 1
+			nose_height_sum += hit_distance
 
 	sample.grounded = hit_count >= 2
 	if sample.grounded:
@@ -181,6 +194,7 @@ func _sample_hover() -> HoverSample:
 	sample.normal = normal
 	sample.compression = compression_sum / maxf(1.0, float(hit_count))
 	sample.height = height_sum / maxf(1.0, float(hit_count))
+	sample.nose_height = nose_height_sum / float(nose_hit_count) if nose_hit_count > 0 else sample.height
 	return sample
 
 
@@ -195,6 +209,15 @@ func _apply_hover_forces(hover: HoverSample, up: Vector3, grounded: bool, delta:
 		velocity += up * repulsion * delta
 		velocity -= up * vertical_speed * hover_damping * delta
 		velocity += Vector3.DOWN * gravity * 0.35 * delta
+
+		# Ported from ship_player.c: a hard bounce when the hull actually touches the floor,
+		# plus a softer push while skimming just under bounce_margin.
+		var floor_push_speed := hover_force * 0.5
+		if hover.height <= 0.0:
+			velocity = velocity.bounce(up) * bounce_restitution
+			velocity -= up * (floor_push_speed * delta)
+		elif hover.height < bounce_margin:
+			velocity += up * (floor_push_speed * delta)
 	else:
 		velocity += Vector3.DOWN * gravity * delta
 
@@ -267,12 +290,21 @@ func _handle_wall_collisions() -> void:
 		break
 
 
-func _update_orientation(up: Vector3, pitch_input: float, grounded: bool, delta: float) -> void:
+func _update_orientation(hover: HoverSample, up: Vector3, pitch_input: float, grounded: bool, delta: float) -> void:
 	var forward := _planar_forward(up)
 	desired_forward = forward.rotated(up, yaw_velocity * delta).normalized()
 
-	if not grounded and absf(pitch_input) > 0.01:
-		desired_forward = desired_forward.rotated(global_transform.basis.x, -pitch_input * 0.7 * delta).normalized()
+	if grounded:
+		# Ported from ship_player.c:370-377: pitch torque driven by the nose/hull height
+		# difference, so the nose leads the slope ahead of the generic slerp below.
+		var nose_diff := hover.height - hover.nose_height
+		pitch_velocity += nose_diff * nose_pitch_gain * delta
+		pitch_velocity = clampf(pitch_velocity, -nose_pitch_max, nose_pitch_max)
+		desired_forward = desired_forward.rotated(global_transform.basis.x, -pitch_velocity * delta).normalized()
+	else:
+		pitch_velocity = move_toward(pitch_velocity, 0.0, nose_pitch_gain * 4.0 * delta)
+		if absf(pitch_input) > 0.01:
+			desired_forward = desired_forward.rotated(global_transform.basis.x, -pitch_input * 0.7 * delta).normalized()
 
 	var right := desired_forward.cross(up).normalized()
 	var corrected_forward := up.cross(right).normalized()

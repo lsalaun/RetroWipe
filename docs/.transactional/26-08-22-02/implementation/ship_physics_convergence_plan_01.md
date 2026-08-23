@@ -50,9 +50,11 @@ acceleration += (forward_velocity - velocity) / (skid + brake * 0.25)
 
 **Validation** : mesurer le temps de stabilisation de la vitesse à poussée constante (doit converger vers une vitesse de palier, pas osciller ni diverger).
 
-## Phase 3 — Contact sol : rebond dur + alignement du nez
+## Phase 3 — Contact sol : rebond dur + alignement du nez ✅ implémenté
 
-**Écarts** :
+`_sample_hover` calcule désormais `HoverSample.nose_height` à partir des deux rayons avant (`HoverFrontLeft`/`HoverFrontRight`), avec repli sur la hauteur moyenne globale si aucun des deux ne touche. `_apply_hover_forces` ajoute le rebond dur / push planché (nouveaux `@export bounce_restitution` = 0.875 et `bounce_margin` = 0.4, `floor_push_speed` dérivé de `hover_force` sans nouvel export). `_update_orientation` reçoit maintenant `hover` et intègre un `pitch_velocity` (nouveau) piloté par `nose_diff = hover.height - hover.nose_height` via `nose_pitch_gain`/`nose_pitch_max`, appliqué à `desired_forward` avant le `slerp` générique ; ce terme se relâche progressivement en vol. Tous les nouveaux champs sont mirroités sur `ShipHandlingProfile` (`apply_to`).
+
+**Écarts d'origine** :
 - Pas de rebond dur quand `height <= 0` (réflexion de vélocité, atténuation 0.875).
 - Pas de torque de tangage basé sur `nose_height` (`ship_player.c:370-377`) — l'assiette actuelle vient d'un `slerp` générique vers la normale du hover.
 

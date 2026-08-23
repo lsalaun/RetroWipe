@@ -4,6 +4,10 @@ class_name ShipHandlingProfile
 @export var hover_height: float = 2.2
 @export var hover_force: float = 46.0
 @export var hover_damping: float = 12.0
+@export var bounce_restitution: float = 0.875
+@export var bounce_margin: float = 0.4
+@export var nose_pitch_gain: float = 1.4
+@export var nose_pitch_max: float = 2.0
 @export var track_magnet: float = 0.9
 @export var gravity: float = 34.0
 @export var thrust_max: float = 70.0
@@ -42,6 +46,10 @@ func apply_to(ship: Node) -> void:
 	ship.hover_height = hover_height
 	ship.hover_force = hover_force
 	ship.hover_damping = hover_damping
+	ship.bounce_restitution = bounce_restitution
+	ship.bounce_margin = bounce_margin
+	ship.nose_pitch_gain = nose_pitch_gain
+	ship.nose_pitch_max = nose_pitch_max
 	ship.track_magnet = track_magnet
 	ship.gravity = gravity
 	ship.thrust_max = thrust_max

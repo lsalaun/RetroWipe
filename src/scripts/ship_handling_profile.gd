@@ -35,8 +35,13 @@ class_name ShipHandlingProfile
 @export var camera_distance: float = 11.0
 @export var camera_height: float = 3.8
 @export var camera_follow_speed: float = 6.0
-@export var wall_bounce_damping: float = 0.45
-@export var wall_turn_kick: float = 0.9
+@export var wall_push_speed: float = 6.0
+@export var wall_nose_hit_width: float = 0.6
+@export var wall_nose_yaw_k1: float = 0.05
+@export var wall_nose_yaw_k2: float = 0.4
+@export var wall_wing_roll_k: float = 0.06
+@export var wall_wing_extra_damping: float = 0.6
+@export var wall_impact_cooldown_duration: float = 0.15
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
 
@@ -77,7 +82,12 @@ func apply_to(ship: Node) -> void:
 	ship.camera_distance = camera_distance
 	ship.camera_height = camera_height
 	ship.camera_follow_speed = camera_follow_speed
-	ship.wall_bounce_damping = wall_bounce_damping
-	ship.wall_turn_kick = wall_turn_kick
+	ship.wall_push_speed = wall_push_speed
+	ship.wall_nose_hit_width = wall_nose_hit_width
+	ship.wall_nose_yaw_k1 = wall_nose_yaw_k1
+	ship.wall_nose_yaw_k2 = wall_nose_yaw_k2
+	ship.wall_wing_roll_k = wall_wing_roll_k
+	ship.wall_wing_extra_damping = wall_wing_extra_damping
+	ship.wall_impact_cooldown_duration = wall_impact_cooldown_duration
 	ship.rescue_delay = rescue_delay
 	ship.rescue_height = rescue_height

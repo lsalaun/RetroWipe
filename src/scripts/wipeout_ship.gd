@@ -44,8 +44,13 @@ class HoverSample:
 @export var camera_distance: float = 11.0
 @export var camera_height: float = 3.8
 @export var camera_follow_speed: float = 6.0
-@export var wall_bounce_damping: float = 0.45
-@export var wall_turn_kick: float = 0.9
+@export var wall_push_speed: float = 6.0 # ported from ship.c wall collision: push-out impulse along the contact normal
+@export var wall_nose_hit_width: float = 0.6 # lateral offset (from ship center) below which a contact counts as a nose hit rather than a wing hit
+@export var wall_nose_yaw_k1: float = 0.05 # ported from ship.c: nose impact yaw magnitude = speed * k1 + k2
+@export var wall_nose_yaw_k2: float = 0.4
+@export var wall_wing_roll_k: float = 0.06 # ported from ship.c: wing impact roll magnitude = |angle(collision_vector, forward)| * speed * k
+@export var wall_wing_extra_damping: float = 0.6 # extra velocity damping applied only on wing impacts
+@export var wall_impact_cooldown_duration: float = 0.15 # ported from ship.c last_impact_time: ignore further impacts for a short window
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
 @export var is_player_controlled: bool = true
@@ -70,6 +75,7 @@ var airborne_time: float = 0.0
 var visual_roll: float = 0.0
 var roll_rate: float = 0.0
 var visual_pitch: float = 0.0
+var wall_impact_cooldown: float = 0.0
 var desired_forward: Vector3 = Vector3.FORWARD
 var last_ground_normal: Vector3 = Vector3.UP
 var spawn_transform: Transform3D
@@ -120,7 +126,7 @@ func _physics_process(delta: float) -> void:
 	_apply_drive_forces(up, steer, pitch_input, grounded, delta)
 
 	move_and_slide()
-	_handle_wall_collisions()
+	_handle_wall_collisions(up, delta)
 	_update_orientation(hover, up, pitch_input, grounded, delta)
 	_update_visuals(steer, pitch_input, grounded, delta)
 	if is_player_controlled:
@@ -278,15 +284,40 @@ func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded
 		velocity += global_transform.basis.y * pitch_input * 8.0 * delta
 
 
-func _handle_wall_collisions() -> void:
+func _handle_wall_collisions(up: Vector3, delta: float) -> void:
+	wall_impact_cooldown = maxf(wall_impact_cooldown - delta, 0.0)
+	if wall_impact_cooldown > 0.0:
+		return
+
 	for index in get_slide_collision_count():
 		var collision := get_slide_collision(index)
 		var normal := collision.get_normal()
 		if absf(normal.y) > 0.45:
 			continue
 
-		velocity = velocity.bounce(normal) * wall_bounce_damping
-		yaw_velocity -= signf(normal.dot(global_transform.basis.x)) * wall_turn_kick
+		var forward := _planar_forward(up)
+		var right := _planar_right(up, forward)
+		var contact_offset := collision.get_position() - global_position
+		var lateral_offset := contact_offset.dot(right)
+		var speed := velocity.length()
+
+		# Ported from ship.c wall response: reflect (factor 2, equivalent to Vector3.bounce),
+		# halve the resulting velocity, then push back out along the contact normal.
+		velocity = velocity.bounce(normal) * 0.5
+		velocity += normal * wall_push_speed
+
+		if absf(lateral_offset) <= wall_nose_hit_width:
+			# Nose hit: yaw kick scaled by impact speed.
+			var yaw_magnitude := speed * wall_nose_yaw_k1 + wall_nose_yaw_k2
+			yaw_velocity -= signf(normal.dot(right)) * yaw_magnitude
+		else:
+			# Wing hit: roll kick scaled by impact angle and speed, plus extra speed loss.
+			var impact_angle := contact_offset.angle_to(forward)
+			var roll_magnitude := impact_angle * speed * wall_wing_roll_k
+			roll_rate += signf(lateral_offset) * roll_magnitude
+			velocity *= wall_wing_extra_damping
+
+		wall_impact_cooldown = wall_impact_cooldown_duration
 		break
 
 
@@ -366,6 +397,7 @@ func _reset_to_spawn() -> void:
 	yaw_velocity = 0.0
 	roll_rate = 0.0
 	visual_roll = 0.0
+	wall_impact_cooldown = 0.0
 	airborne_time = 0.0
 	desired_forward = -spawn_transform.basis.z
 

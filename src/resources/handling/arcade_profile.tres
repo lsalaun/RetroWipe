@@ -29,7 +29,5 @@ align_speed = 12.0
 camera_distance = 11.0
 camera_height = 3.8
 camera_follow_speed = 6.5
-wall_bounce_damping = 0.45
-wall_turn_kick = 1.0
 rescue_delay = 2.5
 rescue_height = 4.0

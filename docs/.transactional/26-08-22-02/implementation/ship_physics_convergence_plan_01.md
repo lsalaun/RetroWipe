@@ -73,9 +73,11 @@ acceleration += (forward_velocity - velocity) / (skid + brake * 0.25)
 
 **Validation** : passage sur une bosse ou un creux doit incliner visiblement le nez avant que le `slerp` générique ne prenne le relais, et un contact vertical dur (chute depuis une rampe) doit produire un vrai rebond au lieu d'un arrêt mou.
 
-## Phase 4 — Collisions murales par face (nez / aile)
+## Phase 4 — Collisions murales par face (nez / aile) ✅ implémenté
 
-**Écart** : `_handle_wall_collisions` fait un rebond générique (`velocity.bounce(normal) * wall_bounce_damping`) avec un `wall_turn_kick` fixe, sans distinguer un choc de nez d'un choc d'aile, ni scaler selon la vitesse/l'angle d'impact.
+`wall_bounce_damping`/`wall_turn_kick` ont été retirés (remplacés par `wall_push_speed`, `wall_nose_hit_width`, `wall_nose_yaw_k1`/`k2`, `wall_wing_roll_k`, `wall_wing_extra_damping`, `wall_impact_cooldown_duration`) sur `WipeoutShip` et `ShipHandlingProfile` (+ les 3 `.tres`, overrides retirés). `_handle_wall_collisions` prend maintenant `up`/`delta`, classe chaque impact via la projection latérale de `collision.get_position() - global_position` sur `right` (seuil `wall_nose_hit_width`), applique `velocity = velocity.bounce(normal) * 0.5` puis `velocity += normal * wall_push_speed` (équivalent à `vec3_reflect(velocity, normal, 2)` + push), puis un yaw kick (`speed * k1 + k2`) pour un choc de nez ou un roll kick sur `roll_rate` (`angle(contact_offset, forward) * speed * k` + amortissement supplémentaire) pour un choc d'aile. Un cooldown (`wall_impact_cooldown`, réinitialisé dans `_reset_to_spawn`) anti-spam a été ajouté.
+
+**Écart d'origine** : `_handle_wall_collisions` faisait un rebond générique (`velocity.bounce(normal) * wall_bounce_damping`) avec un `wall_turn_kick` fixe, sans distinguer un choc de nez d'un choc d'aile, ni scaler selon la vitesse/l'angle d'impact.
 
 **Implémentation** :
 1. Déterminer le point de contact réel (`collision.get_position()`) par rapport au centre du vaisseau et au `forward` pour classer la collision : nez (proche de l'axe avant) vs aile (décalée latéralement) — seuil sur la projection latérale du point de contact.

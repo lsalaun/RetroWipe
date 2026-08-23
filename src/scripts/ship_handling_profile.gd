@@ -10,7 +10,7 @@ class_name ShipHandlingProfile
 @export var thrust_ramp: float = 40.0
 @export var thrust_falloff: float = 20.0
 @export var planar_drag: float = 0.075
-@export var lateral_friction: float = 4.5
+@export var skid: float = 0.35
 @export var airborne_lateral_friction: float = 0.7
 @export var turn_accel: float = 5.8
 @export var turn_reverse_boost: float = 2.0
@@ -44,7 +44,7 @@ func apply_to(ship: Node) -> void:
 	ship.thrust_ramp = thrust_ramp
 	ship.thrust_falloff = thrust_falloff
 	ship.planar_drag = planar_drag
-	ship.lateral_friction = lateral_friction
+	ship.skid = skid
 	ship.airborne_lateral_friction = airborne_lateral_friction
 	ship.turn_accel = turn_accel
 	ship.turn_reverse_boost = turn_reverse_boost

@@ -18,7 +18,7 @@ class HoverSample:
 @export var thrust_ramp: float = 40.0
 @export var thrust_falloff: float = 20.0 # original ramps thrust down at half the ramp-up rate (SHIP_THRUST_FALLOFF = SHIP_THRUST_RATE / 2)
 @export var planar_drag: float = 0.075
-@export var lateral_friction: float = 4.5
+@export var skid: float = 0.35 # ported from ship_player.c:365 grip term: relaxation time constant pulling velocity toward forward_velocity (smaller = stronger grip)
 @export var airborne_lateral_friction: float = 0.7
 @export var turn_accel: float = 5.8
 @export var turn_reverse_boost: float = 2.0 # ported: counter-steering (opposing current yaw) accelerates at double rate for quick flick-turns
@@ -201,16 +201,24 @@ func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded
 
 	velocity += forward * thrust_mag * delta
 
-	var planar_velocity := velocity.slide(up)
-	var forward_speed := planar_velocity.dot(forward)
-	var lateral_speed := planar_velocity.dot(right)
-	var lateral_grip := lateral_friction if grounded else airborne_lateral_friction
-
-	velocity -= right * lateral_speed * lateral_grip * delta
-	velocity -= planar_velocity * planar_drag * delta
-
 	var brake_bias := brake_left - brake_right
 	var brake_sum := brake_left + brake_right
+
+	# Ported from ship_player.c:365 — pulls velocity toward the ship's forward axis
+	# (progressive skid/recovery) instead of just cancelling the lateral component.
+	if grounded:
+		var forward_velocity := forward * velocity.length()
+		var grip_denominator := maxf(skid + brake_sum * 0.25, 0.001)
+		velocity += (forward_velocity - velocity) / grip_denominator * delta
+	else:
+		var airborne_planar_velocity := velocity.slide(up)
+		var airborne_lateral_speed := airborne_planar_velocity.dot(right)
+		velocity -= right * airborne_lateral_speed * airborne_lateral_friction * delta
+
+	var planar_velocity := velocity.slide(up)
+	var forward_speed := planar_velocity.dot(forward)
+	velocity -= planar_velocity * planar_drag * delta
+
 	if brake_sum > 0.0:
 		velocity -= forward * minf(forward_speed, airbrake_drag * brake_sum * delta)
 		yaw_velocity += brake_bias * maxf(planar_velocity.length(), 0.0) * airbrake_turn_factor * delta

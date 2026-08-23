@@ -8,13 +8,15 @@ Chaque phase est indépendante et testable isolément. Ordre recommandé : 0 →
 
 À trancher avant de coder, car elles changent la portée des phases suivantes :
 
-- **Poussée arrière** (`throttle < 0`) : garder comme choix de design Godot mais clamp `thrust_mag` à `>= 0` et traiter `throttle < 0` comme un frein (pas une poussée négative), ce qui se rapproche du airbrake sans dénaturer le feeling actuel.
+- ✅ **Poussée arrière** (`throttle < 0`) : implémenté — `thrust_mag` est clampé à `>= 0` (`maxf(thrust_mag, 0.0)`) et `throttle < 0` ramp un facteur `reverse_brake` (via `airbrake_rate`) qui applique une décélération `reverse_brake_drag` sur `forward` dans `_apply_drive_forces`, au lieu d'une poussée négative. Nouvel `@export var reverse_brake_drag` ajouté sur `WipeoutShip` et `ShipHandlingProfile` (+ `apply_to`). `reverse_brake` réinitialisé dans `_reset_to_spawn`.
 - **Attributs par pilote/équipe** (Phase 8) : nécessaire seulement si le jeu prévoit plusieurs vaisseaux avec des caractéristiques différentes. Si un seul vaisseau jouable est prévu à court terme, reporter cette phase.
 - **Features de piste** (boost pads, jump sections, junctions — Phase 6) : nécessitent un pipeline d'export de métadonnées de piste (Blender → Godot) qui n'existe pas encore. À traiter comme un chantier séparé si le circuit cible en a besoin.
 
-## Phase 1 — Grip / dérapage (`skid`)
+## Phase 1 — Grip / dérapage (`skid`) ✅ implémenté
 
-**Écart** : Godot utilise une friction latérale simple (`velocity -= right * lateral_speed * lateral_friction * delta`) au lieu du terme original qui ramène `velocity` vers `forward_velocity` :
+`lateral_friction` a été retiré (remplacé par `skid`) sur `WipeoutShip` et `ShipHandlingProfile` (+ `arcade_profile.tres`, `default_profile.tres`, `stable_profile.tres`). Dans `_apply_drive_forces`, au sol le bloc de friction latérale est remplacé par le blend `(forward_velocity - velocity) / grip_denominator`; en vol, `airborne_lateral_friction` est conservé tel quel (branche `else`) comme prévu au point 3.
+
+**Écart d'origine** : Godot utilisait une friction latérale simple (`velocity -= right * lateral_speed * lateral_friction * delta`) au lieu du terme original qui ramène `velocity` vers `forward_velocity` :
 
 ```
 acceleration += (forward_velocity - velocity) / (skid + brake * 0.25)

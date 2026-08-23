@@ -54,6 +54,8 @@ class HoverSample:
 @export var mass: float = 1.0 # ported from ship.c ship_collide_with_ship: mass-weighted velocity exchange between ships
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
+@export var rescue_look_back: float = 8.0 # distance behind the closest track point to re-drop the ship at, approximating the original's "last valid section"
+@export var center_line: Path3D # track center line used to rescue the ship back onto the track
 @export var is_player_controlled: bool = true
 @export var handling: Resource
 
@@ -136,7 +138,7 @@ func _physics_process(delta: float) -> void:
 		_update_camera(up, delta)
 
 	if airborne_time > rescue_delay:
-		_reset_to_spawn()
+		_rescue_to_track()
 
 
 ## Returns the frame's control inputs as a Dictionary with keys:
@@ -392,6 +394,41 @@ func _planar_right(up: Vector3, forward: Vector3) -> Vector3:
 
 func _reset_to_spawn() -> void:
 	global_transform = spawn_transform
+	_reset_dynamic_state()
+	desired_forward = -spawn_transform.basis.z
+
+
+## Ported from the original's rescue: re-drop the ship on the track's center line
+## instead of a full reset to spawn, at the closest valid point minus rescue_look_back
+## (approximating "last valid section"). Falls back to _reset_to_spawn if there's no
+## usable center_line for this track.
+func _rescue_to_track() -> void:
+	if center_line == null or center_line.curve == null or center_line.curve.point_count < 2:
+		_reset_to_spawn()
+		return
+
+	var curve := center_line.curve
+	var local_pos := center_line.to_local(global_position)
+	var offset := maxf(curve.get_closest_offset(local_pos) - rescue_look_back, 0.0)
+	var target_local := curve.sample_baked(offset, true)
+	var ahead_local := curve.sample_baked(offset + 1.0, true)
+
+	var forward := ahead_local - target_local
+	forward.y = 0.0
+	if forward.length_squared() < 0.0001:
+		forward = Vector3.FORWARD
+	forward = forward.normalized()
+
+	var right := forward.cross(Vector3.UP).normalized()
+	var up := right.cross(forward).normalized()
+	var target_position := center_line.to_global(target_local) + Vector3.UP * rescue_height
+
+	global_transform = Transform3D(Basis(right, up, -forward).orthonormalized(), target_position)
+	_reset_dynamic_state()
+	desired_forward = forward
+
+
+func _reset_dynamic_state() -> void:
 	velocity = Vector3.ZERO
 	thrust_mag = 0.0
 	reverse_brake = 0.0
@@ -402,7 +439,6 @@ func _reset_to_spawn() -> void:
 	visual_roll = 0.0
 	wall_impact_cooldown = 0.0
 	airborne_time = 0.0
-	desired_forward = -spawn_transform.basis.z
 
 
 func _get_axis(positive: Key, negative: Key) -> float:

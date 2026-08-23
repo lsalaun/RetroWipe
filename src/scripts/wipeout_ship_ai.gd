@@ -7,7 +7,6 @@ class_name WipeoutShipAI
 ## The rank/weapon/rubber-banding DPA logic from the original is out of scope;
 ## only the core path-following behavior is implemented here.
 
-@export var center_line: Path3D
 @export var lane_offset: float = 0.0 # lateral offset from the center line, mirrors hold_left/hold_right strategies
 @export var lookahead_distance: float = 14.0
 @export var target_speed: float = 46.0

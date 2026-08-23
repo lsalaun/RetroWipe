@@ -112,7 +112,9 @@ Nouveau script `ship_collision_manager.gd` (`ShipCollisionManager`), instancié 
 
 **Validation** : deux vaisseaux se percutant de face doivent échanger de la vitesse proportionnellement à leur masse respective et se repousser sans s'interpénétrer ni se figer.
 
-## Phase 6 — Parité des features de piste (boost, jump, junction)
+## Phase 6 — Parité des features de piste (boost, jump, junction) ⏸️ reporté (conforme au point 4)
+
+Aucune donnée de boost/jump/junction n'existe pour `Track_01` (vérifié dans `track_12_curve.json`, `Track01.tscn` et `TrackMeshCollider`), et le pipeline d'export Blender (point 1) n'a pas été modifié. Conformément au point 4 de ce plan et à la décision de Phase 0, l'implémentation reste reportée tant que le circuit cible n'a pas ces éléments — l'implémenter maintenant aurait signifié fabriquer des zones factices sans donnée réelle à consommer. À revisiter dès qu'une piste avec boost/jump/junction est disponible.
 
 **Écart** : aucune donnée de face de piste (boost pads, sections de saut, jonctions) n'est portée ; `TrackMeshCollider` ne génère que des colliders génériques.
 
@@ -122,9 +124,11 @@ Nouveau script `ship_collision_manager.gd` (`ShipCollisionManager`), instancié 
 3. Dans `wipeout_ship.gd`, ajouter des signaux/handlers : `_on_boost_area_entered` (ajoute une impulsion `velocity += track_direction * boost_accel * delta` tant que dans la zone), et une logique de détection de vol au-dessus d'une section `jump` réutilisant `airborne_time`/`_sample_hover`.
 4. Reporter tant que le circuit cible ne contient pas ces éléments.
 
-## Phase 7 — Système de secours (rescue) fidèle
+## Phase 7 — Système de secours (rescue) fidèle ✅ implémenté
 
-**Écart** : Godot utilise un timeout générique (`airborne_time > rescue_delay`) + seuil `y < -25`. L'original calcule la distance à la ligne centrale de la piste (projection sur le segment section→section suivante) et re-largue le vaisseau à la dernière section valide ou à l'atterrissage d'un saut.
+`center_line` (export `Path3D`) a été déplacé de `WipeoutShipAI` vers `WipeoutShip` (base commune) et `main.gd` le câble désormais sur tous les `WipeoutShip` (plus seulement les IA, via `child is WipeoutShip`). `_reset_to_spawn` a été factorisé (`_reset_dynamic_state` partagé) et une nouvelle `_rescue_to_track` remplace le reset générique sur timeout d'envol (`airborne_time > rescue_delay`) : elle projette la position sur `center_line.curve` (`get_closest_offset`), recule de `rescue_look_back` (nouvel `@export`, approx. "dernière section valide"), reconstruit une orientation via la tangente de la courbe (`Basis(right, up, -forward)`), et repose le vaisseau à `rescue_height` au-dessus. Le fallback `_reset_to_spawn` reste utilisé si `center_line`/`curve` est absent, et le filet de sécurité `y < -25.0 → reset spawn` (ainsi que le reset manuel `_wants_reset`) sont inchangés. `rescue_look_back` mirroité sur `ShipHandlingProfile`. Validé en headless (les 3 vaisseaux résolvent `center_line`, un appel forcé à `_rescue_to_track` replace le vaisseau sur la piste avec vélocité nulle, sans erreur).
+
+**Écart d'origine** : Godot utilise un timeout générique (`airborne_time > rescue_delay`) + seuil `y < -25`. L'original calcule la distance à la ligne centrale de la piste (projection sur le segment section→section suivante) et re-largue le vaisseau à la dernière section valide ou à l'atterrissage d'un saut.
 
 **Implémentation** :
 1. Nécessite une notion de "section de piste courante" côté Godot — si absente, dériver une approximation via le point le plus proche sur une `Curve3D` centrale de piste (déjà générée pour d'autres besoins, cf. `track_center_line.gd` en mémoire de session/projet).

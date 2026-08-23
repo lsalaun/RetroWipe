@@ -90,9 +90,11 @@ acceleration += (forward_velocity - velocity) / (skid + brake * 0.25)
 
 **Validation** : un choc frontal doit induire une rotation en lacet (yaw kick) sans forte perte de vitesse latérale ; un choc d'aile doit induire un roulis marqué et amortir la vitesse davantage.
 
-## Phase 5 — Collision vaisseau-vaisseau
+## Phase 5 — Collision vaisseau-vaisseau ✅ implémenté
 
-**Écart** : absente. L'original fait une collision inélastique par conservation de quantité de mouvement pondérée par la masse (`ship_collide_with_ship` dans `ship.c`).
+Nouveau script `ship_collision_manager.gd` (`ShipCollisionManager`), instancié une seule fois au niveau race/scene (`main.tscn`), itère chaque paire de `WipeoutShip` via le groupe `"ships"` (rejoint dans `WipeoutShip._ready()`) pour éviter tout double-traitement A↔B. Détection : rejet rapide par distance au carré (`detection_distance`), puis recouvrement précis via un nouveau `HullArea` (`Area3D` + `CollisionShape3D`, `collision_layer`/`mask = 64`) ajouté à `WipeoutShip.tscn` et `WipeoutShipAI.tscn`, distinct du `CollisionShape3D` du `CharacterBody3D` utilisé pour les murs. Résolution fidèle à `ship_collide_with_ship` : vitesse combinée pondérée par `mass` (nouvel `@export`, mirroité sur `ShipHandlingProfile`), chaque vaisseau tiré à mi-chemin vers cette vitesse, puis poussée de séparation `separation * push_k`. Validé en headless (3 vaisseaux détectés dans le groupe, `mass`/`hull_area` correctement résolus, scène stable sur plusieurs frames physiques).
+
+**Écart d'origine** : absente. L'original fait une collision inélastique par conservation de quantité de mouvement pondérée par la masse (`ship_collide_with_ship` dans `ship.c`).
 
 **Implémentation** :
 1. Créer un gestionnaire au niveau race/scene (pas dans `wipeout_ship.gd` individuellement, pour éviter double-traitement A↔B) : `ShipCollisionManager` (ou fonction statique) itérant sur toutes les paires de vaisseaux actifs chaque frame physique.

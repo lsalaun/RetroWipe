@@ -51,6 +51,7 @@ class HoverSample:
 @export var wall_wing_roll_k: float = 0.06 # ported from ship.c: wing impact roll magnitude = |angle(collision_vector, forward)| * speed * k
 @export var wall_wing_extra_damping: float = 0.6 # extra velocity damping applied only on wing impacts
 @export var wall_impact_cooldown_duration: float = 0.15 # ported from ship.c last_impact_time: ignore further impacts for a short window
+@export var mass: float = 1.0 # ported from ship.c ship_collide_with_ship: mass-weighted velocity exchange between ships
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
 @export var is_player_controlled: bool = true
@@ -64,6 +65,7 @@ class HoverSample:
 ]
 @onready var body_mesh: MeshInstance3D = $BodyMesh
 @onready var camera_rig: Node3D = $CameraRig
+@onready var hull_area: Area3D = $HullArea
 
 var thrust_mag: float = 0.0
 var reverse_brake: float = 0.0
@@ -82,6 +84,7 @@ var spawn_transform: Transform3D
 
 
 func _ready() -> void:
+	add_to_group(&"ships")
 	if handling != null and handling.has_method("apply_to"):
 		handling.call("apply_to", self)
 	spawn_transform = global_transform

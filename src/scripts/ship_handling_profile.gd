@@ -42,6 +42,7 @@ class_name ShipHandlingProfile
 @export var wall_wing_roll_k: float = 0.06
 @export var wall_wing_extra_damping: float = 0.6
 @export var wall_impact_cooldown_duration: float = 0.15
+@export var mass: float = 1.0
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
 
@@ -89,5 +90,6 @@ func apply_to(ship: Node) -> void:
 	ship.wall_wing_roll_k = wall_wing_roll_k
 	ship.wall_wing_extra_damping = wall_wing_extra_damping
 	ship.wall_impact_cooldown_duration = wall_impact_cooldown_duration
+	ship.mass = mass
 	ship.rescue_delay = rescue_delay
 	ship.rescue_height = rescue_height

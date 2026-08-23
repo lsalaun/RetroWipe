@@ -20,6 +20,7 @@ class_name ShipHandlingProfile
 @export var airbrake_rate: float = 5.0
 @export var airbrake_drag: float = 18.0
 @export var airbrake_turn_factor: float = 0.028
+@export var reverse_brake_drag: float = 22.0
 @export var roll_yaw_gain: float = 0.8
 @export var roll_spring_damping: float = 3.0
 @export var align_speed: float = 10.5
@@ -53,6 +54,7 @@ func apply_to(ship: Node) -> void:
 	ship.airbrake_rate = airbrake_rate
 	ship.airbrake_drag = airbrake_drag
 	ship.airbrake_turn_factor = airbrake_turn_factor
+	ship.reverse_brake_drag = reverse_brake_drag
 	ship.roll_yaw_gain = roll_yaw_gain
 	ship.roll_spring_damping = roll_spring_damping
 	ship.align_speed = align_speed

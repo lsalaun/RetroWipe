@@ -28,6 +28,7 @@ class HoverSample:
 @export var airbrake_rate: float = 5.0
 @export var airbrake_drag: float = 18.0
 @export var airbrake_turn_factor: float = 0.028
+@export var reverse_brake_drag: float = 22.0 # throttle < 0 acts as a brake (airbrake-like), not negative thrust
 @export var roll_yaw_gain: float = 0.8 # ported from angular_acceleration.z += (angular_velocity.y - 0.5 * angular_velocity.z)
 @export var roll_spring_damping: float = 3.0
 @export var align_speed: float = 10.5
@@ -51,6 +52,7 @@ class HoverSample:
 @onready var camera_rig: Node3D = $CameraRig
 
 var thrust_mag: float = 0.0
+var reverse_brake: float = 0.0
 var brake_left: float = 0.0
 var brake_right: float = 0.0
 var yaw_velocity: float = 0.0
@@ -135,10 +137,15 @@ func _gather_inputs() -> Dictionary:
 func _update_drive_inputs(throttle: float, wants_left_brake: bool, wants_right_brake: bool, delta: float) -> void:
 	if throttle > 0.0:
 		thrust_mag = move_toward(thrust_mag, throttle * thrust_max, thrust_ramp * delta)
+		reverse_brake = move_toward(reverse_brake, 0.0, airbrake_rate * delta)
 	elif throttle < 0.0:
+		# throttle < 0 is a brake input, not reverse thrust: ramp thrust down and ramp up a brake factor instead.
 		thrust_mag = move_toward(thrust_mag, 0.0, (thrust_ramp + thrust_falloff) * delta)
+		reverse_brake = move_toward(reverse_brake, -throttle, airbrake_rate * delta)
 	else:
 		thrust_mag = move_toward(thrust_mag, 0.0, thrust_falloff * delta)
+		reverse_brake = move_toward(reverse_brake, 0.0, airbrake_rate * delta)
+	thrust_mag = maxf(thrust_mag, 0.0)
 
 	brake_left = move_toward(brake_left, 1.0 if wants_left_brake else 0.0, airbrake_rate * delta)
 	brake_right = move_toward(brake_right, 1.0 if wants_right_brake else 0.0, airbrake_rate * delta)
@@ -207,6 +214,9 @@ func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded
 	if brake_sum > 0.0:
 		velocity -= forward * minf(forward_speed, airbrake_drag * brake_sum * delta)
 		yaw_velocity += brake_bias * maxf(planar_velocity.length(), 0.0) * airbrake_turn_factor * delta
+
+	if reverse_brake > 0.0:
+		velocity -= forward * clampf(forward_speed, 0.0, reverse_brake_drag * reverse_brake * delta)
 
 	# Ported from ship_player.c: steering that opposes the current yaw rate (a quick
 	# counter-steer flick) accelerates at double rate instead of the normal ramp.
@@ -297,6 +307,7 @@ func _reset_to_spawn() -> void:
 	global_transform = spawn_transform
 	velocity = Vector3.ZERO
 	thrust_mag = 0.0
+	reverse_brake = 0.0
 	brake_left = 0.0
 	brake_right = 0.0
 	yaw_velocity = 0.0

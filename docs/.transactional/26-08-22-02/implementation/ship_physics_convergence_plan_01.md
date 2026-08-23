@@ -8,7 +8,7 @@ Chaque phase est indépendante et testable isolément. Ordre recommandé : 0 →
 
 À trancher avant de coder, car elles changent la portée des phases suivantes :
 
-- **Poussée arrière** (`throttle < 0`) : garder comme choix de design Godot, ou la retirer pour coller à l'original (`A_THRUST` unidirectionnel) ? → Recommandation : garder mais clamp `thrust_mag` à `>= 0` et traiter `throttle < 0` comme un frein (pas une poussée négative), ce qui se rapproche du airbrake sans dénaturer le feeling actuel.
+- **Poussée arrière** (`throttle < 0`) : garder comme choix de design Godot mais clamp `thrust_mag` à `>= 0` et traiter `throttle < 0` comme un frein (pas une poussée négative), ce qui se rapproche du airbrake sans dénaturer le feeling actuel.
 - **Attributs par pilote/équipe** (Phase 8) : nécessaire seulement si le jeu prévoit plusieurs vaisseaux avec des caractéristiques différentes. Si un seul vaisseau jouable est prévu à court terme, reporter cette phase.
 - **Features de piste** (boost pads, jump sections, junctions — Phase 6) : nécessitent un pipeline d'export de métadonnées de piste (Blender → Godot) qui n'existe pas encore. À traiter comme un chantier séparé si le circuit cible en a besoin.
 

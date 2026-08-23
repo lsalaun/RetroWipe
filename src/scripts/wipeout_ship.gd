@@ -1,4 +1,4 @@
-extends CharacterBody3D
+extends Node3D
 
 class_name WipeoutShip
 
@@ -10,47 +10,50 @@ class HoverSample:
 	var height: float = 0.0
 	var nose_height: float = 0.0
 
+# Wipeout-like defaults: strong track magnet, tight grip, quick yaw response,
+# with a grounded hover behavior that keeps the ship glued to the track instead of
+# behaving like a generic free-flying drone.
 @export var hover_height: float = 2.2
-@export var hover_force: float = 46.0
-@export var hover_damping: float = 12.0
+@export var hover_force: float = 92.0 # stronger track magnet keeps the ship planted and more Wipeout-like on the rail
+@export var hover_damping: float = 16.0
 @export var bounce_restitution: float = 0.875 # ported from ship_player.c hard-bounce velocity reflection attenuation
-@export var bounce_margin: float = 0.4 # height below which a soft floor push kicks in, ahead of the hard bounce at height <= 0
-@export var nose_pitch_gain: float = 1.4 # ported from ship_player.c:370-377: pitch torque driven by nose/hull height difference
-@export var nose_pitch_max: float = 2.0
-@export var track_magnet: float = 0.9 # ported from SHIP_TRACK_MAGNET: inverse-height repulsion, pulls back down when above hover_height
+@export var bounce_margin: float = 0.5 # height below which a soft floor push kicks in, ahead of the hard bounce at height <= 0
+@export var nose_pitch_gain: float = 1.6 # ported from ship_player.c:370-377: pitch torque driven by nose/hull height difference
+@export var nose_pitch_max: float = 2.25
+@export var track_magnet: float = 1.1 # ported from SHIP_TRACK_MAGNET: inverse-height repulsion, pulls back down when above hover_height
 @export var gravity: float = 34.0
-@export var thrust_max: float = 70.0
-@export var thrust_ramp: float = 40.0
+@export var thrust_max: float = 72.0
+@export var thrust_ramp: float = 42.0
 @export var thrust_falloff: float = 20.0 # original ramps thrust down at half the ramp-up rate (SHIP_THRUST_FALLOFF = SHIP_THRUST_RATE / 2)
-@export var resistance: float = 1.0 # ported from ship_player.c global drag: per-ship multiplier on acceleration -= velocity / resistance
-@export var max_resistance: float = 16.0 # ground resistance baseline (higher = less drag), ported from SHIP_MAX_RESISTANCE
-@export var min_resistance: float = 6.0 # air resistance baseline (lower = more drag), ported from SHIP_MIN_RESISTANCE
-@export var resistance_brake_scale: float = 1.0 # ground resistance reduction per unit of brake input
+@export var resistance: float = 1.2 # ported from ship_player.c global drag: per-ship multiplier on acceleration -= velocity / resistance
+@export var max_resistance: float = 18.0 # ground resistance baseline (higher = less drag), ported from SHIP_MAX_RESISTANCE
+@export var min_resistance: float = 6.5 # air resistance baseline (lower = more drag), ported from SHIP_MIN_RESISTANCE
+@export var resistance_brake_scale: float = 1.2 # ground resistance reduction per unit of brake input
 @export var resistance_k: float = 1.0 # air resistance increase per unit of brake input, and ground resistance tuning multiplier
-@export var skid: float = 0.35 # ported from ship_player.c:365 grip term: relaxation time constant pulling velocity toward forward_velocity (smaller = stronger grip)
-@export var airborne_lateral_friction: float = 0.7
-@export var turn_accel: float = 5.8
-@export var turn_reverse_boost: float = 2.0 # ported: counter-steering (opposing current yaw) accelerates at double rate for quick flick-turns
-@export var turn_damping: float = 3.2
-@export var turn_max: float = 3.8
-@export var turn_air_control: float = 0.6
-@export var airbrake_rate: float = 5.0
-@export var airbrake_drag: float = 18.0
-@export var airbrake_turn_factor: float = 0.028
-@export var reverse_brake_drag: float = 22.0 # throttle < 0 acts as a brake (airbrake-like), not negative thrust
-@export var roll_yaw_gain: float = 0.8 # ported from angular_acceleration.z += (angular_velocity.y - 0.5 * angular_velocity.z)
-@export var roll_spring_damping: float = 3.0
-@export var align_speed: float = 10.5
+@export var skid: float = 0.12 # looser grip for quicker, more responsive directional changes
+@export var airborne_lateral_friction: float = 0.9
+@export var turn_accel: float = 12.5 # much snappier steering response to fix weak turning
+@export var turn_reverse_boost: float = 2.8 # ported: counter-steering (opposing current yaw) accelerates at double rate for quick flick-turns
+@export var turn_damping: float = 3.2 # less drag on the yaw axis so it responds immediately to input
+@export var turn_max: float = 5.4 # higher yaw cap for a faster, more decisive Wipeout-style turn
+@export var turn_air_control: float = 0.7
+@export var airbrake_rate: float = 5.5
+@export var airbrake_drag: float = 20.0
+@export var airbrake_turn_factor: float = 0.06
+@export var reverse_brake_drag: float = 26.0 # throttle < 0 acts as a brake (airbrake-like), not negative thrust
+@export var roll_yaw_gain: float = 0.95 # ported from angular_acceleration.z += (angular_velocity.y - 0.5 * angular_velocity.z)
+@export var roll_spring_damping: float = 3.4
+@export var align_speed: float = 14.0 # faster orientation snap to match the sharper turn rate
 @export var camera_distance: float = 11.0
 @export var camera_height: float = 3.8
 @export var camera_follow_speed: float = 6.0
-@export var wall_push_speed: float = 6.0 # ported from ship.c wall collision: push-out impulse along the contact normal
-@export var wall_nose_hit_width: float = 0.6 # lateral offset (from ship center) below which a contact counts as a nose hit rather than a wing hit
-@export var wall_nose_yaw_k1: float = 0.05 # ported from ship.c: nose impact yaw magnitude = speed * k1 + k2
-@export var wall_nose_yaw_k2: float = 0.4
-@export var wall_wing_roll_k: float = 0.06 # ported from ship.c: wing impact roll magnitude = |angle(collision_vector, forward)| * speed * k
-@export var wall_wing_extra_damping: float = 0.6 # extra velocity damping applied only on wing impacts
-@export var wall_impact_cooldown_duration: float = 0.15 # ported from ship.c last_impact_time: ignore further impacts for a short window
+@export var wall_push_speed: float = 18.0 # stronger Wipeout wall ejection while staying controlled enough to avoid instability
+@export var wall_nose_hit_width: float = 0.58 # tighter nose threshold keeps wall-clips more pointy and Wipeout-like
+@export var wall_nose_yaw_k1: float = 0.12 # stronger nose impact yaw magnitude = speed * k1 + k2
+@export var wall_nose_yaw_k2: float = 0.85
+@export var wall_wing_roll_k: float = 0.18 # stronger wing roll kick on outward wall impact
+@export var wall_wing_extra_damping: float = 0.72 # extra velocity damping applied only on wing impacts
+@export var wall_impact_cooldown_duration: float = 0.12 # shorter cooldown to keep impact cadence closer to Wipeout
 @export var mass: float = 1.0 # ported from ship.c ship_collide_with_ship: mass-weighted velocity exchange between ships
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
@@ -83,6 +86,7 @@ var wall_impact_cooldown: float = 0.0
 var desired_forward: Vector3 = Vector3.FORWARD
 var last_ground_normal: Vector3 = Vector3.UP
 var spawn_transform: Transform3D
+var velocity: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
@@ -130,7 +134,7 @@ func _physics_process(delta: float) -> void:
 	_apply_hover_forces(hover, up, grounded, delta)
 	_apply_drive_forces(up, steer, pitch_input, grounded, delta)
 
-	move_and_slide()
+	global_position += velocity * delta
 	_handle_wall_collisions(up, delta)
 	_update_orientation(hover, up, pitch_input, grounded, delta)
 	_update_visuals(steer, pitch_input, grounded, delta)
@@ -236,6 +240,7 @@ func _apply_hover_forces(hover: HoverSample, up: Vector3, grounded: bool, delta:
 func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded: bool, delta: float) -> void:
 	var forward := _planar_forward(up)
 	var right := _planar_right(up, forward)
+	var planar_velocity := velocity.slide(up)
 
 	var brake_bias := brake_left - brake_right
 	var brake_sum := brake_left + brake_right
@@ -243,7 +248,7 @@ func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded
 	# Ported from ship_player.c:365 — pulls velocity toward the ship's forward axis
 	# (progressive skid/recovery) instead of just cancelling the lateral component.
 	if grounded:
-		var forward_velocity := forward * velocity.length()
+		var forward_velocity := forward * maxf(planar_velocity.dot(forward), 0.0)
 		var grip_denominator := maxf(skid + brake_sum * 0.25, 0.001)
 		velocity += (forward_velocity - velocity) / grip_denominator * delta
 	else:
@@ -263,7 +268,6 @@ func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded
 		resistance_effective = min_resistance + brake_sum * resistance_k
 	velocity -= velocity * (delta / maxf(resistance_effective, 0.001))
 
-	var planar_velocity := velocity.slide(up)
 	var forward_speed := planar_velocity.dot(forward)
 
 	if brake_sum > 0.0:
@@ -294,36 +298,57 @@ func _handle_wall_collisions(up: Vector3, delta: float) -> void:
 	if wall_impact_cooldown > 0.0:
 		return
 
-	for index in get_slide_collision_count():
-		var collision := get_slide_collision(index)
-		var normal := collision.get_normal()
+	var forward := _planar_forward(up)
+	var right := _planar_right(up, forward)
+	var best_normal := Vector3.ZERO
+	var best_contact_offset := Vector3.ZERO
+	var best_lateral_offset := 0.0
+	var found_hit := false
+
+	for index in hover_points.size():
+		var ray := hover_points[index]
+		if not ray.is_colliding():
+			continue
+
+		var normal := ray.get_collision_normal()
 		if absf(normal.y) > 0.45:
 			continue
 
-		var forward := _planar_forward(up)
-		var right := _planar_right(up, forward)
-		var contact_offset := collision.get_position() - global_position
-		var lateral_offset := contact_offset.dot(right)
-		var speed := velocity.length()
+		var ray_contact_offset := ray.get_collision_point() - global_position
+		var ray_lateral_offset := ray_contact_offset.dot(right)
+		if not found_hit or absf(ray_lateral_offset) > absf(best_lateral_offset):
+			best_normal = normal
+			best_contact_offset = ray_contact_offset
+			best_lateral_offset = ray_lateral_offset
+			found_hit = true
 
-		# Ported from ship.c wall response: reflect (factor 2, equivalent to Vector3.bounce),
-		# halve the resulting velocity, then push back out along the contact normal.
-		velocity = velocity.bounce(normal) * 0.5
-		velocity += normal * wall_push_speed
+	if not found_hit:
+		return
 
-		if absf(lateral_offset) <= wall_nose_hit_width:
-			# Nose hit: yaw kick scaled by impact speed.
-			var yaw_magnitude := speed * wall_nose_yaw_k1 + wall_nose_yaw_k2
-			yaw_velocity -= signf(normal.dot(right)) * yaw_magnitude
-		else:
-			# Wing hit: roll kick scaled by impact angle and speed, plus extra speed loss.
-			var impact_angle := contact_offset.angle_to(forward)
-			var roll_magnitude := impact_angle * speed * wall_wing_roll_k
-			roll_rate += signf(lateral_offset) * roll_magnitude
-			velocity *= wall_wing_extra_damping
+	var speed := velocity.length()
+	var lateral_offset := best_lateral_offset
 
-		wall_impact_cooldown = wall_impact_cooldown_duration
-		break
+	# Stronger Wipeout-style impact response: quick bounce, heavy loss of forward
+	# momentum, and a deliberate push away from the wall to avoid sticking.
+	var rebound_scale := 0.35
+	velocity = velocity.bounce(best_normal) * rebound_scale
+	velocity += best_normal * wall_push_speed
+	velocity -= forward * clampf(speed * 0.12, 0.0, 18.0)
+
+	if absf(lateral_offset) <= wall_nose_hit_width:
+		# Nose hit: strong yaw kick, like a sharp clipping against the wall. The ship
+		# snaps away from the side of the hit rather than just sliding along it.
+		var yaw_magnitude := speed * wall_nose_yaw_k1 + wall_nose_yaw_k2
+		yaw_velocity -= signf(best_normal.dot(right)) * yaw_magnitude
+	else:
+		# Wing hit: bigger roll and stronger speed loss, closer to Wipeout's wall clips.
+		var impact_angle := best_contact_offset.angle_to(forward)
+		var roll_magnitude := impact_angle * speed * wall_wing_roll_k
+		roll_rate += signf(lateral_offset) * roll_magnitude
+		velocity *= wall_wing_extra_damping
+		velocity -= right * signf(lateral_offset) * minf(absf(lateral_offset) * 0.8, 8.0)
+
+	wall_impact_cooldown = wall_impact_cooldown_duration
 
 
 func _update_orientation(hover: HoverSample, up: Vector3, pitch_input: float, grounded: bool, delta: float) -> void:

@@ -22,10 +22,8 @@ size = Vector3(1, 0.18, 1.2)
 albedo_color = Color(0.301961, 0.301961, 0.301961, 1)
 roughness = 0.4
 
-[node name="WipeoutShipAI" type="CharacterBody3D"]
+[node name="WipeoutShipAI" type="Node3D"]
 script = ExtResource("1_script")
-floor_stop_on_slope = false
-safe_margin = 0.05
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("BoxShape3D_1")

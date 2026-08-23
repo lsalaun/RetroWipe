@@ -146,9 +146,9 @@ Aucune donnée de boost/jump/junction n'existe pour `Track_01` (vérifié dans `
 2. `apply_to(ship)` déjà appelé dans `_ready()` — l'étendre pour écrire ces nouveaux champs sur le vaisseau au lieu de dupliquer les constantes par défaut.
 3. Un `.tres` par pilote/équipe/classe, chargé selon la sélection du joueur/IA.
 
-## Phase 9 — Validation & non-régression ⏸️ partiellement couvert
+## Phase 9 — Validation & non-régression ✅ implémenté
 
-Point 2 (traçabilité `@export` ↔ constante C d'origine) est déjà fait au fil de l'eau via les commentaires `# ported from ...` ajoutés sur chaque nouveau champ (phases 1-8). Points 1 (scène de test isolée) et 3 (repasse d'audit complète) restent à faire — ce sont des chantiers de validation à part entière (scène dédiée, puis nouvelle analyse comparative) plutôt que des changements de code ponctuels ; à lancer explicitement si voulu maintenant que les phases 1 à 8 sont posées.
+Nouvelle scène isolée `src/scenes/tests/PhysicsTestTrack.tscn` (piste plate courte + une bosse + un mur latéral + `CenterLine` en courbe placeholder + un `WipeoutShip`), pilotée par le nouveau script `physics_test_track.gd` (étend `TrackMeshCollider` pour générer les colliders trimesh, puis câble `center_line` sur le vaisseau) — permet de tester manuellement les phases 1 à 4 sans dépendre du pipeline Blender/Track01. Validée en headless : colliders générés sur le sol et le mur, `center_line` résolu, le vaisseau se stabilise sur le sol après 30 frames physiques sans traverser ni s'envoler. Point 2 (traçabilité `@export` ↔ constante C) toujours couvert au fil de l'eau via les commentaires `# ported from ...`. Point 3 (repasse d'audit) fait : nouveau `../audit/ship_physics_fidelity_audit_02.md` comparant l'état post-phases 0-8 à l'audit initial — 7 des 9 écarts de fond du passage 1 sont désormais fidèlement portés, 2 restent des choix de scope assumés (poussée arrière, features de piste).
 
 1. Ajouter une scène de test isolée (piste courte + un vaisseau) pour valider chaque phase indépendamment avant intégration.
 2. Documenter, pour chaque `@export` modifié ou ajouté, sa correspondance avec la constante C d'origine (comme déjà fait pour certains champs) — garde la traçabilité pour le prochain audit.

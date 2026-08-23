@@ -135,16 +135,20 @@ Aucune donnée de boost/jump/junction n'existe pour `Track_01` (vérifié dans `
 2. Remplacer `_reset_to_spawn` par une téléportation vers le point de piste valide le plus proche en arrière, avec une petite tolérance de hauteur (`rescue_height`), au lieu du reset complet à `spawn_transform`.
 3. Garder le fallback `y < -25.0 → reset spawn` comme filet de sécurité ultime.
 
-## Phase 8 — Profils d'attributs par pilote/équipe
+## Phase 8 — Profils d'attributs par pilote/équipe ✅ implémenté
 
-**Écart** : un seul jeu de `@export` sur le nœud, pas de système `def.teams[team].attributes[class]` (mass, thrust_max, skid, turn_rate, turn_rate_max, resistance).
+`ShipHandlingProfile` (`ship_handling_profile.gd`) portait déjà `mass`, `thrust_max`, `skid` et `resistance` comme effet de bord des phases 1/2/5 ; `turn_rate`/`turn_rate_max` de l'audit correspondent aux champs déjà présents `turn_accel`/`turn_max` (mêmes rôles, noms hérités du portage initial — non renommés pour ne pas perturber les phases 1-7 déjà validées). Ce qui manquait réellement : le câblage "un `.tres` par pilote/équipe, chargé selon la sélection". `main.tscn` référence maintenant `arcade_profile.tres` sur `ShipAI1` et `stable_profile.tres` sur `ShipAI2` (le joueur garde `default_profile.tres` via `WipeoutShip.tscn`), donnant 3 profils distincts actifs simultanément. Validé en headless : `Ship` (skid=0.35, resistance=1.0), `ShipAI1` (skid=0.45, resistance=0.85), `ShipAI2` (skid=0.28, turn_accel=5.2, resistance=1.15) — chaque vaisseau reçoit bien les valeurs de son propre `.tres` via `apply_to()`.
+
+**Écart d'origine** : un seul jeu de `@export` sur le nœud, pas de système `def.teams[team].attributes[class]` (mass, thrust_max, skid, turn_rate, turn_rate_max, resistance).
 
 **Implémentation** :
 1. Créer une `Resource` `ShipHandlingProfile` (étendre le `handling: Resource` déjà présent) avec les champs : `mass`, `thrust_max`, `skid`, `turn_rate`, `turn_rate_max`, `resistance`.
 2. `apply_to(ship)` déjà appelé dans `_ready()` — l'étendre pour écrire ces nouveaux champs sur le vaisseau au lieu de dupliquer les constantes par défaut.
 3. Un `.tres` par pilote/équipe/classe, chargé selon la sélection du joueur/IA.
 
-## Phase 9 — Validation & non-régression
+## Phase 9 — Validation & non-régression ⏸️ partiellement couvert
+
+Point 2 (traçabilité `@export` ↔ constante C d'origine) est déjà fait au fil de l'eau via les commentaires `# ported from ...` ajoutés sur chaque nouveau champ (phases 1-8). Points 1 (scène de test isolée) et 3 (repasse d'audit complète) restent à faire — ce sont des chantiers de validation à part entière (scène dédiée, puis nouvelle analyse comparative) plutôt que des changements de code ponctuels ; à lancer explicitement si voulu maintenant que les phases 1 à 8 sont posées.
 
 1. Ajouter une scène de test isolée (piste courte + un vaisseau) pour valider chaque phase indépendamment avant intégration.
 2. Documenter, pour chaque `@export` modifié ou ajouté, sa correspondance avec la constante C d'origine (comme déjà fait pour certains champs) — garde la traçabilité pour le prochain audit.

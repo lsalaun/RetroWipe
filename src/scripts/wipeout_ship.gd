@@ -17,7 +17,11 @@ class HoverSample:
 @export var thrust_max: float = 70.0
 @export var thrust_ramp: float = 40.0
 @export var thrust_falloff: float = 20.0 # original ramps thrust down at half the ramp-up rate (SHIP_THRUST_FALLOFF = SHIP_THRUST_RATE / 2)
-@export var planar_drag: float = 0.075
+@export var resistance: float = 1.0 # ported from ship_player.c global drag: per-ship multiplier on acceleration -= velocity / resistance
+@export var max_resistance: float = 16.0 # ground resistance baseline (higher = less drag), ported from SHIP_MAX_RESISTANCE
+@export var min_resistance: float = 6.0 # air resistance baseline (lower = more drag), ported from SHIP_MIN_RESISTANCE
+@export var resistance_brake_scale: float = 1.0 # ground resistance reduction per unit of brake input
+@export var resistance_k: float = 1.0 # air resistance increase per unit of brake input, and ground resistance tuning multiplier
 @export var skid: float = 0.35 # ported from ship_player.c:365 grip term: relaxation time constant pulling velocity toward forward_velocity (smaller = stronger grip)
 @export var airborne_lateral_friction: float = 0.7
 @export var turn_accel: float = 5.8
@@ -199,8 +203,6 @@ func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded
 	var forward := _planar_forward(up)
 	var right := _planar_right(up, forward)
 
-	velocity += forward * thrust_mag * delta
-
 	var brake_bias := brake_left - brake_right
 	var brake_sum := brake_left + brake_right
 
@@ -215,9 +217,20 @@ func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded
 		var airborne_lateral_speed := airborne_planar_velocity.dot(right)
 		velocity -= right * airborne_lateral_speed * airborne_lateral_friction * delta
 
+	velocity += forward * thrust_mag * delta
+
+	# Ported from ship_player.c: acceleration -= velocity / resistance applied on all 3 axes
+	# (replaces a planar-only drag). Resistance is higher on the ground (less drag) and lower
+	# in the air (more drag), both eased by the current brake input (SHIP_MAX/MIN_RESISTANCE split).
+	var resistance_effective: float
+	if grounded:
+		resistance_effective = resistance * (max_resistance - brake_sum * 0.125 * resistance_brake_scale) * resistance_k
+	else:
+		resistance_effective = min_resistance + brake_sum * resistance_k
+	velocity -= velocity * (delta / maxf(resistance_effective, 0.001))
+
 	var planar_velocity := velocity.slide(up)
 	var forward_speed := planar_velocity.dot(forward)
-	velocity -= planar_velocity * planar_drag * delta
 
 	if brake_sum > 0.0:
 		velocity -= forward * minf(forward_speed, airbrake_drag * brake_sum * delta)

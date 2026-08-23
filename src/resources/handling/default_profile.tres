@@ -12,7 +12,6 @@ gravity = 34.0
 thrust_max = 74.0
 thrust_ramp = 42.0
 thrust_falloff = 22.0
-planar_drag = 0.068
 skid = 0.35
 airborne_lateral_friction = 0.68
 turn_accel = 6.2

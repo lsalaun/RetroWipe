@@ -35,9 +35,11 @@ acceleration += (forward_velocity - velocity) / (skid + brake * 0.25)
 
 **Validation** : sur ligne droite, un `steer` bref doit faire déraper l'arrière puis se réaligner progressivement sur l'axe du vaisseau (pas une correction instantanée comme avec `lateral_friction` élevé).
 
-## Phase 2 — Traînée globale (drag 3 axes) + résistance sol/air
+## Phase 2 — Traînée globale (drag 3 axes) + résistance sol/air ✅ implémenté
 
-**Écart** : l'original applique `acceleration -= velocity / resistance` sur les 3 axes, avec `resistance` dépendant du freinage et différente au sol (`SHIP_MAX_RESISTANCE`) vs en vol (`SHIP_MIN_RESISTANCE`). Godot sépare drag planaire (`planar_drag`) et amortissement vertical (`hover_damping`).
+`planar_drag` a été retiré (remplacé par `resistance` + `max_resistance`/`min_resistance`/`resistance_brake_scale`/`resistance_k`) sur `WipeoutShip` et `ShipHandlingProfile` (+ les 3 `.tres`). Dans `_apply_drive_forces`, l'ordre a été rapproché de l'original (friction/skid → poussée → drag) : le calcul du grip (Phase 1) précède désormais l'ajout de la poussée, suivi d'un drag global appliqué sur `velocity` en 3D (`velocity -= velocity * (delta / resistance_effective)`), avec `resistance_effective` plus grand au sol (moins de drag) et plus petit en vol (plus de drag), tous deux atténués par `brake_sum`. `hover_damping` est conservé tel quel dans `_apply_hover_forces` (option de repli du point 3, non remplacé) puisque ce drag global s'applique déjà sur l'axe vertical.
+
+**Écart d'origine** : l'original applique `acceleration -= velocity / resistance` sur les 3 axes, avec `resistance` dépendant du freinage et différente au sol (`SHIP_MAX_RESISTANCE`) vs en vol (`SHIP_MIN_RESISTANCE`). Godot séparait drag planaire (`planar_drag`) et amortissement vertical (`hover_damping`).
 
 **Implémentation** :
 1. Ajouter `@export var resistance: float` et utiliser les constantes de référence :

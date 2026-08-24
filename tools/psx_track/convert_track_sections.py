@@ -43,7 +43,7 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-from psx_track_common import make_axis_transform
+from psx_track_common import DEFAULT_UNITS_PER_METER, make_axis_transform, scale_point
 
 SECTION_STRUCT = struct.Struct(
     ">"
@@ -131,6 +131,10 @@ def main() -> None:
         "--flip-z", action="store_true",
         help="Also negate Z, keep in sync with convert_track_geometry.py's --flip-z for this same track",
     )
+    parser.add_argument(
+        "--units-per-meter", type=float, default=DEFAULT_UNITS_PER_METER,
+        help=f"Raw PSX units per meter (default {DEFAULT_UNITS_PER_METER}, an estimate -- see psx_track_common.py). Pass 1.0 to keep raw PSX units. Keep in sync with convert_track_geometry.py for this same track.",
+    )
     args = parser.parse_args()
 
     sections = parse_trs(args.trs)
@@ -142,7 +146,7 @@ def main() -> None:
     order, closed = walk_main_loop(sections, args.start)
 
     transform, _ = make_axis_transform(args.flip_z)
-    points = [list(transform(sections[i].center)) for i in order]
+    points = [list(scale_point(transform(sections[i].center), args.units_per_meter)) for i in order]
     section_flags = [decode_flags(sections[i].flags) for i in order]
 
     data = {

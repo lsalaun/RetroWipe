@@ -54,7 +54,7 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-from psx_track_common import make_axis_transform
+from psx_track_common import DEFAULT_UNITS_PER_METER, make_axis_transform, scale_point
 
 VERTEX_STRUCT = struct.Struct(">3i4x")  # x, y, z (int32, big-endian), 4 bytes padding
 FACE_STRUCT = struct.Struct(">4h3hBBI")  # v0..v3, nx,ny,nz, texture, flags, color (big-endian)
@@ -100,6 +100,7 @@ def build_triangle_soup(
     vertices: list[tuple[float, float, float]],
     faces: list[Face],
     flip_z: bool,
+    units_per_meter: float,
 ) -> dict[int, dict[str, list]]:
     """Groups flat-shaded triangles by original texture id.
 
@@ -112,8 +113,8 @@ def build_triangle_soup(
     groups: dict[int, dict[str, list]] = {}
 
     for face in faces:
-        v0, v1, v2, v3 = (transform(vertices[i]) for i in face.indices)
-        normal = transform(face.normal)
+        v0, v1, v2, v3 = (scale_point(transform(vertices[i]), units_per_meter) for i in face.indices)
+        normal = transform(face.normal)  # direction, not scaled
         flip = bool(face.flags & FACE_FLIP_TEXTURE)
         uv_table = TILE_UV[1 if flip else 0]
         uv = [(u / TILE_SIZE, w / TILE_SIZE) for u, w in uv_table]
@@ -239,11 +240,15 @@ def main() -> None:
         "--flip-z", action="store_true",
         help="Also negate Z (use if the track comes out mirrored after a first conversion)",
     )
+    parser.add_argument(
+        "--units-per-meter", type=float, default=DEFAULT_UNITS_PER_METER,
+        help=f"Raw PSX units per meter (default {DEFAULT_UNITS_PER_METER}, an estimate -- see psx_track_common.py). Pass 1.0 to keep raw PSX units.",
+    )
     args = parser.parse_args()
 
     vertices = parse_trv(args.trv)
     faces = parse_trf(args.trf)
-    groups = build_triangle_soup(vertices, faces, args.flip_z)
+    groups = build_triangle_soup(vertices, faces, args.flip_z, args.units_per_meter)
 
     suffix = args.output.suffix.lower()
     if suffix == ".obj":

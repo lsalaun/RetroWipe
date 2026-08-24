@@ -46,6 +46,7 @@ class_name ShipHandlingProfile
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
 @export var rescue_look_back: float = 8.0
+@export var void_fall_margin: float = 25.0
 
 func apply_to(ship: Node) -> void:
 	if not ship:
@@ -95,3 +96,4 @@ func apply_to(ship: Node) -> void:
 	ship.rescue_delay = rescue_delay
 	ship.rescue_height = rescue_height
 	ship.rescue_look_back = rescue_look_back
+	ship.void_fall_margin = void_fall_margin

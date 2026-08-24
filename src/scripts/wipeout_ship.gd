@@ -58,6 +58,7 @@ class HoverSample:
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
 @export var rescue_look_back: float = 8.0 # distance behind the closest track point to re-drop the ship at, approximating the original's "last valid section"
+@export var void_fall_margin: float = 25.0 # how far below the last grounded height counts as a fall into the void, not an absolute world Y
 @export var center_line: Path3D # track center line used to rescue the ship back onto the track
 @export var is_player_controlled: bool = true
 @export var handling: Resource
@@ -85,6 +86,7 @@ var visual_pitch: float = 0.0
 var wall_impact_cooldown: float = 0.0
 var desired_forward: Vector3 = Vector3.FORWARD
 var last_ground_normal: Vector3 = Vector3.UP
+var last_ground_height: float = 0.0
 var spawn_transform: Transform3D
 var velocity: Vector3 = Vector3.ZERO
 
@@ -96,6 +98,7 @@ func _ready() -> void:
 	spawn_transform = global_transform
 	desired_forward = -global_transform.basis.z
 	last_ground_normal = Vector3.UP
+	last_ground_height = global_position.y
 	_snap_camera_to_ship()
 
 
@@ -108,7 +111,7 @@ func _snap_camera_to_ship() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _wants_reset() or global_position.y < -25.0:
+	if _wants_reset() or global_position.y < last_ground_height - void_fall_margin:
 		_reset_to_spawn()
 		return
 
@@ -128,6 +131,7 @@ func _physics_process(delta: float) -> void:
 	if grounded:
 		airborne_time = 0.0
 		last_ground_normal = hover.normal
+		last_ground_height = global_position.y
 	else:
 		airborne_time += delta
 
@@ -421,6 +425,7 @@ func _reset_to_spawn() -> void:
 	global_transform = spawn_transform
 	_reset_dynamic_state()
 	desired_forward = -spawn_transform.basis.z
+	last_ground_height = spawn_transform.origin.y
 
 
 ## Ported from the original's rescue: re-drop the ship on the track's center line
@@ -451,6 +456,7 @@ func _rescue_to_track() -> void:
 	global_transform = Transform3D(Basis(right, up, -forward).orthonormalized(), target_position)
 	_reset_dynamic_state()
 	desired_forward = forward
+	last_ground_height = target_position.y
 
 
 func _reset_dynamic_state() -> void:

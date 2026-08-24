@@ -6,24 +6,33 @@ This is a standalone parser (stdlib only, no Blender/bpy required) that
 mirrors the binary layout read by track_load_vertices()/track_load_faces()
 in wipeout-rewrite's src/wipeout/track.c:
 
-    TRACK.TRV: 16 bytes/vertex -> int32 x, y, z, then 4 bytes padding.
-    TRACK.TRF: 20 bytes/face   -> int16 v0,v1,v2,v3 (quad vertex indices),
-                                  int16 nx,ny,nz (normal, fixed-point /4096),
-                                  uint8 texture id, uint8 flags, uint32 color.
+    TRACK.TRV: 16 bytes/vertex -> int32 x, y, z (big-endian), then 4 bytes
+                                  padding.
+    TRACK.TRF: 20 bytes/face   -> int16 v0,v1,v2,v3 (quad vertex indices,
+                                  big-endian), int16 nx,ny,nz (normal,
+                                  fixed-point /4096, big-endian), uint8
+                                  texture id, uint8 flags, uint32 color.
+    Big-endian is not a typo: utils.h's get_i16()/get_i32() (used by
+    track_load_vertices()/track_load_faces(), as opposed to the _le variants)
+    read MSB-first, most likely a leftover of asset tooling built on
+    big-endian MIPS workstations of the era despite the PSX CPU itself being
+    little-endian. Verified empirically against real TRACK01 data: reading
+    little-endian gives garbage (vertex indices to invalid indices, normals
+    far from unit length); big-endian gives indices within range and unit
+    normals.
     Each face is two triangles: (v0,v1,v2) and (v3,v0,v2), flat shaded with
     the face's single normal (this matches ship.c/track.c's own tris[0]/[1]
     construction).
 
 Coordinate system: the source engine's world Y axis points down (evidenced
-by camera.c's ship->mat.basis.down usage and by SHIP_ON_TRACK_GRAVITY being
-a *positive* Y vector meant to pull the ship towards the track). Godot/glTF
-use +Y up, so by default this script negates Y and reverses triangle winding
-to compensate (a single axis flip inverts handedness). This assumption has
-NOT been visually verified against real track data (none was available at
-authoring time) -- after a first conversion, open the result in Blender and
-check that the track reads right-side-up and that face normals point away
-from the drivable surface; use --flip-z if the track instead comes out
-mirrored left/right.
+by camera.c's ship->mat.basis.down usage, and confirmed by testing against
+real TRACK01 data: raw face normals for track-surface faces have a negative
+Y component, which only cancels out SHIP_ON_TRACK_GRAVITY's *positive* Y
+push in ship_player.c's hover equilibrium if +Y points down). Godot/glTF use
++Y up, so by default this script negates Y and reverses triangle winding to
+compensate (a single axis flip inverts handedness). Still worth a visual
+sanity check in Blender on a new track before trusting it blindly; use
+--flip-z if the geometry comes out mirrored left/right.
 
 Texture UVs use the original's fixed per-face tile layout (a 128x128 unit
 tile per face, flipped for FACE_FLIP_TEXTURE) normalized to 0..1 -- this is
@@ -45,8 +54,8 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-VERTEX_STRUCT = struct.Struct("<3i4x")  # x, y, z (int32), 4 bytes padding
-FACE_STRUCT = struct.Struct("<4h3hBBI")  # v0..v3, nx,ny,nz, texture, flags, color
+VERTEX_STRUCT = struct.Struct(">3i4x")  # x, y, z (int32, big-endian), 4 bytes padding
+FACE_STRUCT = struct.Struct(">4h3hBBI")  # v0..v3, nx,ny,nz, texture, flags, color (big-endian)
 
 FACE_FLIP_TEXTURE = 1 << 2
 TILE_SIZE = 128.0

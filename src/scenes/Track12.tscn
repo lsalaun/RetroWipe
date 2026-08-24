@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
-[ext_resource type="PackedScene" uid="uid://cr54ll4e1ljpt" path="res://assets/tracks/Track_01/track_12_mesh.glb" id="1_mesh"]
-[ext_resource type="PackedScene" uid="uid://dktes3n3qm0pg" path="res://assets/tracks/Track_01/track_12_curve.glb" id="2_curve"]
+[ext_resource type="PackedScene" uid="uid://cr54ll4e1ljpt" path="res://assets/tracks/Track_12/track_12_mesh.glb" id="1_mesh"]
+[ext_resource type="PackedScene" uid="uid://dktes3n3qm0pg" path="res://assets/tracks/Track_12/track_12_curve.glb" id="2_curve"]
 [ext_resource type="Script" uid="uid://b2qabxspa48k3" path="res://scripts/track_center_line.gd" id="3_script"]
 [ext_resource type="Script" uid="uid://b3xoy2a264go8" path="res://scripts/track_mesh_collider.gd" id="4_script"]
 
@@ -13,7 +13,7 @@ script = ExtResource("4_script")
 
 [node name="CenterLine" type="Path3D" parent="."]
 script = ExtResource("3_script")
-source_json = "res://assets/tracks/Track_01/track_12_curve.json"
+source_json = "res://assets/tracks/Track_12/track_12_curve.json"
 source_scene = ExtResource("2_curve")
 
 [node name="ShipSpawn" type="Marker3D" parent="."]

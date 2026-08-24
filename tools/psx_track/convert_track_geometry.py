@@ -54,6 +54,8 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
+from psx_track_common import make_axis_transform
+
 VERTEX_STRUCT = struct.Struct(">3i4x")  # x, y, z (int32, big-endian), 4 bytes padding
 FACE_STRUCT = struct.Struct(">4h3hBBI")  # v0..v3, nx,ny,nz, texture, flags, color (big-endian)
 
@@ -92,17 +94,6 @@ def parse_trf(path: Path) -> list[Face]:
         normal = (nx / 4096.0, ny / 4096.0, nz / 4096.0)
         faces.append(Face((v0, v1, v2, v3), normal, texture, flags))
     return faces
-
-
-def make_axis_transform(flip_z: bool):
-    # Default: negate Y only (source is Y-down, Godot/glTF are Y-up).
-    def transform(v: tuple[float, float, float]) -> tuple[float, float, float]:
-        x, y, z = v
-        return (x, -y, -z if flip_z else z)
-
-    # An odd number of negated axes flips triangle winding/handedness.
-    reverse_winding = not flip_z
-    return transform, reverse_winding
 
 
 def build_triangle_soup(

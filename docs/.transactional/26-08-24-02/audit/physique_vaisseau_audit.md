@@ -63,6 +63,23 @@ PSX → Godot explicite (l'original tourne en virgule fixe/unités NTSC à
 Ce n'est pas un problème en soi, mais rien ne garantit que ces ratios
 resteraient cohérents avec une piste à une échelle différente.
 
+**Mise à jour** : un vrai facteur d'échelle est désormais calculable, grâce à
+la conversion de `TRACK01` (`TRACK.TRV`/`TRACK.TRF`/`TRACK.TRS`, voir
+`godot/tools/psx_track/`) et à la longueur de circuit documentée pour
+Altima VII (≈5500 m, [wipeout.fandom.com/wiki/Altima_VII](https://wipeout.fandom.com/wiki/Altima_VII)) :
+la somme des segments du centerline extrait (319 sections, boucle fermée)
+donne 585969 unités PSX brutes, soit **≈106,5 unités PSX par mètre**. Une
+estimation croisée à partir du dénivelé documenté (359 m vs 11948 unités
+d'amplitude Y sur le centerline) donne ≈33,3 unités/mètre — un écart
+d'environ 3,2× avec l'estimation par longueur, non résolu (le dénivelé d'un
+wiki fan est une mesure moins rigoureusement définie que la longueur de
+piste, donc l'estimation par longueur est jugée plus fiable, mais aucune
+troisième source chiffrée — ex. vitesse max en km/h — n'a été trouvée pour
+trancher). Ce facteur ne s'applique qu'à `TRACK01`/Altima VII ; `Track_01`
+dans ce projet Godot reste une recréation Blender indépendante, donc ce
+facteur ne s'applique pas telle quelle aux constantes déjà réglées à la main
+pour cette piste.
+
 **Suggestion** : documenter en commentaire qu'il n'existe pas de facteur
 d'échelle réel à préserver — le rewrite C garde les unités spatiales PSX
 brutes (seul le pas de temps a été converti, cf. l'article de portage de
@@ -70,7 +87,10 @@ phoboslab), et la piste Godot est recréée à la main dans Blender plutôt que
 convertie depuis les données PSX (`TRACK.TRV`/`TRACK.TRF`). Ce qui compte
 donc est de préserver les *ratios* entre constantes liées (déjà fait pour
 `ground_gravity_scale`), pas une conversion en unités absolues qui n'a
-jamais existé.
+jamais existé — sauf si une piste est un jour importée directement depuis
+des données PSX réelles via `godot/tools/psx_track/`, auquel cas le facteur
+≈106,5 unités/mètre ci-dessus devient un point de départ pertinent (à
+confirmer avant de s'y fier pleinement).
 
 ## Ce qui n'a pas besoin d'être retouché
 

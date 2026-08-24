@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://cr54ll4e1ljpt"
-path="res://.godot/imported/track_12_mesh.glb-1bd98340793a93a069e65060c7bb6e4f.scn"
+uid="uid://dktes3n3qm0pg"
+path="res://.godot/imported/track_12_curve.glb-31ded7fbb86e36ca4f8047466f9b1c60.scn"
 
 [deps]
 
-source_file="res://assets/tracks/Track_01/track_12_mesh.glb"
-dest_files=["res://.godot/imported/track_12_mesh.glb-1bd98340793a93a069e65060c7bb6e4f.scn"]
+source_file="res://assets/tracks/Track_12/track_12_curve.glb"
+dest_files=["res://.godot/imported/track_12_curve.glb-31ded7fbb86e36ca4f8047466f9b1c60.scn"]
 
 [params]
 
@@ -39,14 +39,7 @@ import_script/path=""
 materials/extract=0
 materials/extract_format=0
 materials/extract_path=""
-_subresources={
-"nodes": {
-"PATH:track_12": {
-"generate/physics": true,
-"physics/shape_type": 2
-}
-}
-}
+_subresources={}
 gltf/naming_version=2
 gltf/embedded_image_handling=1
 gltf/texture_map_mode=1

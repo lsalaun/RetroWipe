@@ -63,8 +63,14 @@ PSX → Godot explicite (l'original tourne en virgule fixe/unités NTSC à
 Ce n'est pas un problème en soi, mais rien ne garantit que ces ratios
 resteraient cohérents avec une piste à une échelle différente.
 
-**Suggestion** : documenter en commentaire le facteur d'échelle implicite
-(ex. « 1 unité Godot ≈ X unités PSX ») pour figer cette intention.
+**Suggestion** : documenter en commentaire qu'il n'existe pas de facteur
+d'échelle réel à préserver — le rewrite C garde les unités spatiales PSX
+brutes (seul le pas de temps a été converti, cf. l'article de portage de
+phoboslab), et la piste Godot est recréée à la main dans Blender plutôt que
+convertie depuis les données PSX (`TRACK.TRV`/`TRACK.TRF`). Ce qui compte
+donc est de préserver les *ratios* entre constantes liées (déjà fait pour
+`ground_gravity_scale`), pas une conversion en unités absolues qui n'a
+jamais existé.
 
 ## Ce qui n'a pas besoin d'être retouché
 

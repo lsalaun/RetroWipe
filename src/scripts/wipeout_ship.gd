@@ -32,11 +32,11 @@ class HoverSample:
 @export var resistance_k: float = 1.0 # air resistance increase per unit of brake input, and ground resistance tuning multiplier
 @export var skid: float = 0.12 # looser grip for quicker, more responsive directional changes
 @export var airborne_lateral_friction: float = 0.9
-@export var turn_accel: float = 12.5 # much snappier steering response to fix weak turning
+@export var turn_accel: float = 16.0 # much snappier steering response to fix weak turning
 @export var turn_reverse_boost: float = 2.8 # ported: counter-steering (opposing current yaw) accelerates at double rate for quick flick-turns
 @export var turn_damping: float = 3.2 # less drag on the yaw axis so it responds immediately to input
-@export var turn_max: float = 5.4 # higher yaw cap for a faster, more decisive Wipeout-style turn
-@export var turn_air_control: float = 0.7
+@export var turn_max: float = 7.0 # higher yaw cap for a faster, more decisive Wipeout-style turn
+@export var turn_air_control: float = 0.9
 @export var airbrake_rate: float = 5.5
 @export var airbrake_drag: float = 20.0
 @export var airbrake_turn_factor: float = 0.06

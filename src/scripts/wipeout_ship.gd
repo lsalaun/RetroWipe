@@ -13,11 +13,18 @@ class HoverSample:
 # Wipeout-like defaults: strong track magnet, tight grip, quick yaw response,
 # with a grounded hover behavior that keeps the ship glued to the track instead of
 # behaving like a generic free-flying drone.
+# Tuning note: values here are hand-tuned for Godot's meter/variable-delta model, not a
+# literal 1:1 conversion of the original's fixed-point/NTSC-30Hz constants (SHIP_TRACK_MAGNET,
+# SHIP_MAX_RESISTANCE, etc.) — what's ported faithfully is the *ratio* between related
+# constants (e.g. ground_gravity_scale = SHIP_ON_TRACK_GRAVITY / SHIP_FLYING_GRAVITY = 0.375),
+# not their absolute magnitude.
 @export var hover_height: float = 2.2
 @export var hover_force: float = 92.0 # stronger track magnet keeps the ship planted and more Wipeout-like on the rail
 @export var hover_damping: float = 16.0
 @export var bounce_restitution: float = 0.875 # ported from ship_player.c hard-bounce velocity reflection attenuation
 @export var bounce_margin: float = 0.5 # height below which a soft floor push kicks in, ahead of the hard bounce at height <= 0
+@export var hover_min_normal_y: float = 0.5 # hover rays with a more horizontal normal are treated as a wall hit, not ground, and ignored
+@export var grounded_coyote_time: float = 0.08 # grace period keeping `grounded` true across a single-frame drop to 1 hover hit, to avoid sol/air flicker at track edges/bumps
 @export var nose_pitch_gain: float = 1.6 # ported from ship_player.c:370-377: pitch torque driven by nose/hull height difference
 @export var nose_pitch_max: float = 2.25
 @export var track_magnet: float = 1.1 # ported from SHIP_TRACK_MAGNET: inverse-height repulsion, pulls back down when above hover_height
@@ -36,7 +43,7 @@ class HoverSample:
 @export var turn_reverse_boost: float = 2.8 # ported: counter-steering (opposing current yaw) accelerates at double rate for quick flick-turns
 @export var turn_damping: float = 3.2 # less drag on the yaw axis so it responds immediately to input
 @export var turn_max: float = 7.0 # higher yaw cap for a faster, more decisive Wipeout-style turn
-@export var turn_air_control: float = 0.9
+@export var turn_air_control: float = 0.9 # gameplay addition, not ported: the original applies the same steering accel on ground and in the air
 @export var airbrake_rate: float = 5.5
 @export var airbrake_drag: float = 20.0
 @export var airbrake_turn_factor: float = 0.06
@@ -88,6 +95,7 @@ var wall_impact_cooldown: float = 0.0
 var desired_forward: Vector3 = Vector3.FORWARD
 var last_ground_normal: Vector3 = Vector3.UP
 var last_ground_height: float = 0.0
+var grounded_grace_timer: float = 0.0
 var spawn_transform: Transform3D
 var velocity: Vector3 = Vector3.ZERO
 
@@ -125,7 +133,7 @@ func _physics_process(delta: float) -> void:
 
 	_update_drive_inputs(throttle, wants_left_brake, wants_right_brake, delta)
 
-	var hover: HoverSample = _sample_hover()
+	var hover: HoverSample = _sample_hover(delta)
 	var grounded: bool = hover.grounded
 	var up: Vector3 = hover.normal if grounded else last_ground_normal.slerp(Vector3.UP, min(1.0, airborne_time * 1.5))
 
@@ -181,7 +189,7 @@ func _update_drive_inputs(throttle: float, wants_left_brake: bool, wants_right_b
 	brake_right = move_toward(brake_right, 1.0 if wants_right_brake else 0.0, airbrake_rate * delta)
 
 
-func _sample_hover() -> HoverSample:
+func _sample_hover(delta: float) -> HoverSample:
 	var sample := HoverSample.new()
 	var hit_count := 0
 	var normal := Vector3.ZERO
@@ -195,8 +203,12 @@ func _sample_hover() -> HoverSample:
 		if not ray.is_colliding():
 			continue
 
+		var collision_normal := ray.get_collision_normal()
+		if absf(collision_normal.y) < hover_min_normal_y:
+			continue # too vertical to be ground/ceiling: this ray clipped a wall, not the track
+
 		hit_count += 1
-		normal += ray.get_collision_normal()
+		normal += collision_normal
 		var hit_distance := ray.global_position.distance_to(ray.get_collision_point())
 		height_sum += hit_distance
 		compression_sum += clampf(1.0 - hit_distance / hover_height, -1.0, 1.0)
@@ -205,8 +217,15 @@ func _sample_hover() -> HoverSample:
 			nose_hit_count += 1
 			nose_height_sum += hit_distance
 
-	sample.grounded = hit_count >= 2
-	if sample.grounded:
+	var raw_grounded := hit_count >= 2
+	if raw_grounded:
+		grounded_grace_timer = grounded_coyote_time
+	else:
+		grounded_grace_timer = maxf(grounded_grace_timer - delta, 0.0)
+	# A single remaining hit within the grace period still counts as grounded, smoothing out
+	# the sol/air flicker that a hard hit_count >= 2 threshold would cause at track edges/bumps.
+	sample.grounded = raw_grounded or (hit_count >= 1 and grounded_grace_timer > 0.0)
+	if sample.grounded and hit_count > 0:
 		normal = (normal / float(hit_count)).normalized()
 	else:
 		normal = Vector3.UP

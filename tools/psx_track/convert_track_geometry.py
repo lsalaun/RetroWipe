@@ -35,15 +35,24 @@ sanity check in Blender on a new track before trusting it blindly; use
 --flip-z if the geometry comes out mirrored left/right.
 
 Texture UVs use the original's fixed per-face tile layout (a 128x128 unit
-tile per face, flipped for FACE_FLIP_TEXTURE) normalized to 0..1 -- this is
-NOT a real texture atlas mapping (LIBRARY.CMP/TTF is out of scope here), it
-only gives every face a well-formed local UV square to re-map textures onto
-later. Faces are grouped by their original texture id (OBJ material groups /
-glTF primitives) so that grouping survives into Blender/Godot.
+tile per face, flipped for FACE_FLIP_TEXTURE) normalized to 0..1, matching
+the per-texture-id tiles assembled below from LIBRARY.CMP/LIBRARY.TTF (see
+track_load() in track.c): each face's `texture` id selects one assembled
+128x128 near-LOD tile (a 4x4 grid of 32x32 sub-tiles decompressed from
+LIBRARY.CMP), exported as its own PNG and wired up as that face group's
+material texture. Faces are grouped by their original texture id (OBJ
+material groups / glTF primitives) so that grouping survives into
+Blender/Godot.
 
 Usage:
     python convert_track_geometry.py TRACK.TRV TRACK.TRF output.obj
     python convert_track_geometry.py TRACK.TRV TRACK.TRF output.gltf --flip-z
+
+Texture export (enabled by default): looks for library.cmp/library.ttf (any
+case) next to TRACK.TRV, decodes them, and writes one PNG per texture id
+actually used by the mesh into a `<output-stem>_textures/` folder next to
+the output file. Pass --library-cmp/--library-ttf to point elsewhere, or
+--no-textures to skip export entirely (the previous untextured behavior).
 """
 
 from __future__ import annotations
@@ -54,7 +63,15 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-from psx_track_common import DEFAULT_UNITS_PER_METER, make_axis_transform, scale_point
+from psx_track_common import (
+    DEFAULT_UNITS_PER_METER,
+    build_tile_texture,
+    make_axis_transform,
+    parse_cmp,
+    parse_ttf,
+    scale_point,
+    write_png,
+)
 
 VERTEX_STRUCT = struct.Struct(">3i4x")  # x, y, z (int32, big-endian), 4 bytes padding
 FACE_STRUCT = struct.Struct(">4h3hBBI")  # v0..v3, nx,ny,nz, texture, flags, color (big-endian)
@@ -135,7 +152,50 @@ def build_triangle_soup(
     return groups
 
 
-def write_obj(groups: dict[int, dict[str, list]], out_path: Path) -> None:
+def _find_case_insensitive(directory: Path, name: str) -> Path | None:
+    direct = directory / name
+    if direct.exists():
+        return direct
+    for candidate in directory.iterdir():
+        if candidate.is_file() and candidate.name.lower() == name.lower():
+            return candidate
+    return None
+
+
+def export_face_textures(
+    library_cmp: Path,
+    library_ttf: Path,
+    texture_ids: set[int],
+    out_dir: Path,
+) -> dict[int, str]:
+    """Assembles the near-LOD tile texture for each texture id actually used
+    by the mesh, from LIBRARY.CMP + LIBRARY.TTF, and writes them as PNGs.
+
+    Returns {texture_id: png_filename} for ids that could be resolved; ids
+    out of the TTF's range are silently skipped so the mesh export still
+    works even with a mismatched/partial texture set.
+    """
+    cmp_entries = parse_cmp(library_cmp.read_bytes())
+    ttf_tiles = parse_ttf(library_ttf.read_bytes())
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    texture_files: dict[int, str] = {}
+    for texture_id in sorted(texture_ids):
+        if texture_id >= len(ttf_tiles):
+            continue
+        width, height, pixels = build_tile_texture(cmp_entries, ttf_tiles[texture_id]["near"])
+        filename = f"tex_{texture_id}.png"
+        write_png(out_dir / filename, width, height, pixels)
+        texture_files[texture_id] = filename
+    return texture_files
+
+
+def write_obj(
+    groups: dict[int, dict[str, list]],
+    out_path: Path,
+    texture_files: dict[int, str] | None = None,
+    texture_subdir: str = "",
+) -> None:
     mtl_path = out_path.with_suffix(".mtl")
     lines = [f"mtllib {mtl_path.name}"]
     mtl_lines = []
@@ -144,7 +204,12 @@ def write_obj(groups: dict[int, dict[str, list]], out_path: Path) -> None:
     for texture_id in sorted(groups):
         group = groups[texture_id]
         mat_name = f"tex_{texture_id}"
-        mtl_lines.append(f"newmtl {mat_name}\nKd 1.0 1.0 1.0\n")
+        mtl_lines.append(f"newmtl {mat_name}\nKd 1.0 1.0 1.0")
+        texture_filename = (texture_files or {}).get(texture_id)
+        if texture_filename:
+            texture_path = f"{texture_subdir}/{texture_filename}" if texture_subdir else texture_filename
+            mtl_lines.append(f"map_Kd {texture_path}")
+        mtl_lines.append("")
         lines.append(f"g face_texture_{texture_id}")
         lines.append(f"usemtl {mat_name}")
 
@@ -167,13 +232,21 @@ def write_obj(groups: dict[int, dict[str, list]], out_path: Path) -> None:
     mtl_path.write_text("\n".join(mtl_lines), encoding="utf-8")
 
 
-def write_gltf(groups: dict[int, dict[str, list]], out_path: Path) -> None:
+def write_gltf(
+    groups: dict[int, dict[str, list]],
+    out_path: Path,
+    texture_files: dict[int, str] | None = None,
+    texture_subdir: str = "",
+) -> None:
     bin_path = out_path.with_suffix(".bin")
     buffer_bytes = bytearray()
     buffer_views = []
     accessors = []
     materials = []
     primitives = []
+    images = []
+    textures = []
+    image_index_by_id: dict[int, int] = {}
 
     def push_floats(values: list[tuple[float, ...]], component_count: int, want_bounds: bool):
         offset = len(buffer_bytes)
@@ -206,7 +279,16 @@ def write_gltf(groups: dict[int, dict[str, list]], out_path: Path) -> None:
         norm_idx = push_floats(group["normals"], 3, want_bounds=False)
         uv_idx = push_floats(group["uvs"], 2, want_bounds=False)
 
-        materials.append({"name": f"tex_{texture_id}", "pbrMetallicRoughness": {"baseColorFactor": [1, 1, 1, 1]}})
+        material: dict = {"name": f"tex_{texture_id}", "pbrMetallicRoughness": {"baseColorFactor": [1, 1, 1, 1]}}
+        texture_filename = (texture_files or {}).get(texture_id)
+        if texture_filename:
+            if texture_id not in image_index_by_id:
+                texture_uri = f"{texture_subdir}/{texture_filename}" if texture_subdir else texture_filename
+                images.append({"uri": texture_uri})
+                textures.append({"source": len(images) - 1})
+                image_index_by_id[texture_id] = len(textures) - 1
+            material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": image_index_by_id[texture_id]}
+        materials.append(material)
         primitives.append(
             {
                 "attributes": {"POSITION": pos_idx, "NORMAL": norm_idx, "TEXCOORD_0": uv_idx},
@@ -226,6 +308,9 @@ def write_gltf(groups: dict[int, dict[str, list]], out_path: Path) -> None:
         "bufferViews": buffer_views,
         "buffers": [{"uri": bin_path.name, "byteLength": len(buffer_bytes)}],
     }
+    if images:
+        gltf["images"] = images
+        gltf["textures"] = textures
 
     bin_path.write_bytes(bytes(buffer_bytes))
     out_path.write_text(json.dumps(gltf), encoding="utf-8")
@@ -244,17 +329,44 @@ def main() -> None:
         "--units-per-meter", type=float, default=DEFAULT_UNITS_PER_METER,
         help=f"Raw PSX units per meter (default {DEFAULT_UNITS_PER_METER}, an estimate -- see psx_track_common.py). Pass 1.0 to keep raw PSX units.",
     )
+    parser.add_argument(
+        "--library-cmp", type=Path, default=None,
+        help="Path to LIBRARY.CMP (defaults to library.cmp next to TRACK.TRV, any case)",
+    )
+    parser.add_argument(
+        "--library-ttf", type=Path, default=None,
+        help="Path to LIBRARY.TTF (defaults to library.ttf next to TRACK.TRV, any case)",
+    )
+    parser.add_argument(
+        "--no-textures", action="store_true",
+        help="Skip texture export even if LIBRARY.CMP/LIBRARY.TTF are found",
+    )
     args = parser.parse_args()
 
     vertices = parse_trv(args.trv)
     faces = parse_trf(args.trf)
     groups = build_triangle_soup(vertices, faces, args.flip_z, args.units_per_meter)
 
+    texture_files: dict[int, str] = {}
+    texture_subdir = f"{args.output.stem}_textures"
+    if not args.no_textures:
+        library_cmp = args.library_cmp or _find_case_insensitive(args.trv.parent, "library.cmp")
+        library_ttf = args.library_ttf or _find_case_insensitive(args.trv.parent, "library.ttf")
+        if library_cmp and library_ttf:
+            texture_dir = args.output.parent / texture_subdir
+            texture_files = export_face_textures(library_cmp, library_ttf, set(groups.keys()), texture_dir)
+            print(f"Exported {len(texture_files)} texture(s) to {texture_dir}")
+        else:
+            print(
+                "No LIBRARY.CMP/LIBRARY.TTF found next to TRACK.TRV, skipping texture export "
+                "(pass --library-cmp/--library-ttf explicitly, or --no-textures to silence this)."
+            )
+
     suffix = args.output.suffix.lower()
     if suffix == ".obj":
-        write_obj(groups, args.output)
+        write_obj(groups, args.output, texture_files, texture_subdir)
     elif suffix in (".gltf",):
-        write_gltf(groups, args.output)
+        write_gltf(groups, args.output, texture_files, texture_subdir)
     else:
         raise SystemExit(f"Unsupported output extension {suffix!r}, use .obj or .gltf")
 

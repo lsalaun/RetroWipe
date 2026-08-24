@@ -14,7 +14,6 @@ thrust_ramp = 38.0
 thrust_falloff = 18.0
 resistance = 1.15
 skid = 0.28
-airborne_lateral_friction = 0.6
 turn_accel = 6.8
 turn_reverse_boost = 1.8
 turn_damping = 3.8

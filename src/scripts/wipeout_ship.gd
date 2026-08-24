@@ -21,17 +21,17 @@ class HoverSample:
 @export var nose_pitch_gain: float = 1.6 # ported from ship_player.c:370-377: pitch torque driven by nose/hull height difference
 @export var nose_pitch_max: float = 2.25
 @export var track_magnet: float = 1.1 # ported from SHIP_TRACK_MAGNET: inverse-height repulsion, pulls back down when above hover_height
-@export var gravity: float = 34.0
+@export var gravity: float = 34.0 # airborne gravity baseline, ported from SHIP_FLYING_GRAVITY
+@export var ground_gravity_scale: float = 0.375 # on-track gravity is weaker than airborne gravity: SHIP_ON_TRACK_GRAVITY / SHIP_FLYING_GRAVITY = 30000/80000
 @export var thrust_max: float = 72.0
 @export var thrust_ramp: float = 42.0
 @export var thrust_falloff: float = 20.0 # original ramps thrust down at half the ramp-up rate (SHIP_THRUST_FALLOFF = SHIP_THRUST_RATE / 2)
 @export var resistance: float = 1.2 # ported from ship_player.c global drag: per-ship multiplier on acceleration -= velocity / resistance
-@export var max_resistance: float = 18.0 # ground resistance baseline (higher = less drag), ported from SHIP_MAX_RESISTANCE
-@export var min_resistance: float = 6.5 # air resistance baseline (lower = more drag), ported from SHIP_MIN_RESISTANCE
-@export var resistance_brake_scale: float = 1.2 # ground resistance reduction per unit of brake input
-@export var resistance_k: float = 1.0 # air resistance increase per unit of brake input, and ground resistance tuning multiplier
-@export var skid: float = 0.12 # looser grip for quicker, more responsive directional changes
-@export var airborne_lateral_friction: float = 0.9
+@export var max_resistance: float = 18.0 # velocity drag baseline, ported from SHIP_MAX_RESISTANCE (used identically on ground and in the air)
+@export var min_resistance: float = 6.5 # air grip divisor baseline, ported from SHIP_MIN_RESISTANCE: how strongly airborne velocity is pulled toward the forward axis
+@export var resistance_brake_scale: float = 1.2 # ground/air drag reduction per unit of brake input
+@export var resistance_k: float = 1.0 # global drag tuning multiplier
+@export var skid: float = 0.12 # ground grip divisor: looser grip for quicker, more responsive directional changes
 @export var turn_accel: float = 16.0 # much snappier steering response to fix weak turning
 @export var turn_reverse_boost: float = 2.8 # ported: counter-steering (opposing current yaw) accelerates at double rate for quick flick-turns
 @export var turn_damping: float = 3.2 # less drag on the yaw axis so it responds immediately to input
@@ -78,6 +78,7 @@ var reverse_brake: float = 0.0
 var brake_left: float = 0.0
 var brake_right: float = 0.0
 var yaw_velocity: float = 0.0
+var brake_yaw_rate: float = 0.0 # transient heading contribution from differential brake steering, recomputed each frame (no inertia)
 var pitch_velocity: float = 0.0
 var airborne_time: float = 0.0
 var visual_roll: float = 0.0
@@ -227,7 +228,7 @@ func _apply_hover_forces(hover: HoverSample, up: Vector3, grounded: bool, delta:
 		var repulsion := clampf(track_magnet * (hover_height / height - 1.0) * hover_force, -hover_force * 2.0, hover_force * 6.0)
 		velocity += up * repulsion * delta
 		velocity -= up * vertical_speed * hover_damping * delta
-		velocity += Vector3.DOWN * gravity * 0.35 * delta
+		velocity += Vector3.DOWN * gravity * ground_gravity_scale * delta
 
 		# Ported from ship_player.c: a hard bounce when the hull actually touches the floor,
 		# plus a softer push while skimming just under bounce_margin.
@@ -243,40 +244,37 @@ func _apply_hover_forces(hover: HoverSample, up: Vector3, grounded: bool, delta:
 
 func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded: bool, delta: float) -> void:
 	var forward := _planar_forward(up)
-	var right := _planar_right(up, forward)
 	var planar_velocity := velocity.slide(up)
 
 	var brake_bias := brake_left - brake_right
 	var brake_sum := brake_left + brake_right
 
-	# Ported from ship_player.c:365 — pulls velocity toward the ship's forward axis
-	# (progressive skid/recovery) instead of just cancelling the lateral component.
-	if grounded:
-		var forward_velocity := forward * maxf(planar_velocity.dot(forward), 0.0)
-		var grip_denominator := maxf(skid + brake_sum * 0.25, 0.001)
-		velocity += (forward_velocity - velocity) / grip_denominator * delta
-	else:
-		var airborne_planar_velocity := velocity.slide(up)
-		var airborne_lateral_speed := airborne_planar_velocity.dot(right)
-		velocity -= right * airborne_lateral_speed * airborne_lateral_friction * delta
+	# Ported from ship_player.c:365 (ground) / :410 (air) — pulls velocity toward the ship's
+	# forward axis. Ground uses the tight `skid` divisor; air uses the much looser
+	# SHIP_MIN_RESISTANCE-based divisor, so grip is far weaker while airborne instead of a
+	# separate hand-tuned lateral friction cancel.
+	var forward_velocity := forward * maxf(planar_velocity.dot(forward), 0.0)
+	var grip_denominator := maxf(skid + brake_sum * 0.25, 0.001) if grounded else maxf(min_resistance + brake_sum * 4.0, 0.001)
+	velocity += (forward_velocity - velocity) / grip_denominator * delta
 
 	velocity += forward * thrust_mag * delta
 
-	# Ported from ship_player.c: acceleration -= velocity / resistance applied on all 3 axes
-	# (replaces a planar-only drag). Resistance is higher on the ground (less drag) and lower
-	# in the air (more drag), both eased by the current brake input (SHIP_MAX/MIN_RESISTANCE split).
-	var resistance_effective: float
-	if grounded:
-		resistance_effective = resistance * (max_resistance - brake_sum * 0.125 * resistance_brake_scale) * resistance_k
-	else:
-		resistance_effective = min_resistance + brake_sum * resistance_k
+	# Ported from ship_player.c: acceleration -= velocity / resistance applied on all 3 axes.
+	# The original reuses this same SHIP_MAX_RESISTANCE-based drag term on the ground and in
+	# the air — SHIP_MIN_RESISTANCE only feeds the air grip divisor above, it does not replace
+	# this drag term.
+	var resistance_effective := resistance * (max_resistance - brake_sum * 0.125 * resistance_brake_scale) * resistance_k
 	velocity -= velocity * (delta / maxf(resistance_effective, 0.001))
 
 	var forward_speed := planar_velocity.dot(forward)
 
+	# Ported from ship_player.c: angle.y += brake_dir * speed * k — brake steering is added
+	# directly to the heading each frame (see _update_orientation), not accumulated as
+	# persistent angular velocity/inertia like the steering input below.
+	brake_yaw_rate = 0.0
 	if brake_sum > 0.0:
 		velocity -= forward * minf(forward_speed, airbrake_drag * brake_sum * delta)
-		yaw_velocity += brake_bias * maxf(planar_velocity.length(), 0.0) * airbrake_turn_factor * delta
+		brake_yaw_rate = brake_bias * maxf(planar_velocity.length(), 0.0) * airbrake_turn_factor
 
 	if reverse_brake > 0.0:
 		velocity -= forward * clampf(forward_speed, 0.0, reverse_brake_drag * reverse_brake * delta)
@@ -357,7 +355,9 @@ func _handle_wall_collisions(up: Vector3, delta: float) -> void:
 
 func _update_orientation(hover: HoverSample, up: Vector3, pitch_input: float, grounded: bool, delta: float) -> void:
 	var forward := _planar_forward(up)
-	desired_forward = forward.rotated(up, yaw_velocity * delta).normalized()
+	# brake_yaw_rate is a transient contribution (ported from ship_player.c's direct
+	# angle.y += brake_dir * speed term) applied on top of the integrated yaw_velocity.
+	desired_forward = forward.rotated(up, (yaw_velocity + brake_yaw_rate) * delta).normalized()
 
 	if grounded:
 		# Ported from ship_player.c:370-377: pitch torque driven by the nose/hull height
@@ -466,6 +466,7 @@ func _reset_dynamic_state() -> void:
 	brake_left = 0.0
 	brake_right = 0.0
 	yaw_velocity = 0.0
+	brake_yaw_rate = 0.0
 	roll_rate = 0.0
 	visual_roll = 0.0
 	wall_impact_cooldown = 0.0

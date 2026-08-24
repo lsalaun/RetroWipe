@@ -88,6 +88,59 @@ L'original ralentit la poussée deux fois moins vite qu'il ne l'augmente :
 `thrust_falloff` a été ajusté de 28 à 20 pour respecter ce ratio 2:1 par
 rapport à `thrust_ramp` (40).
 
+### 5. Gravité différente sol/air
+
+L'original applique une gravité bien plus forte en vol qu'au sol (où le
+magnet de piste compense l'essentiel de la chute) :
+
+```c
+#define SHIP_FLYING_GRAVITY   vec3(0, 80000.0, 0)
+#define SHIP_ON_TRACK_GRAVITY vec3(0, 30000.0, 0)
+```
+
+Porté dans `_apply_hover_forces()` via `ground_gravity_scale` (0.375 =
+30000/80000 par défaut), appliqué à `gravity` uniquement au sol ; en vol,
+`gravity` s'applique à pleine valeur.
+
+### 6. Grip et résistance différenciés sol/air (mêmes constantes que l'original)
+
+L'original réutilise **la même formule de résistance/traînée** au sol et en
+vol (basée sur `SHIP_MAX_RESISTANCE`) ; ce qui diffère entre sol et air, c'est
+le diviseur du terme qui ramène la vitesse vers l'axe avant du vaisseau
+(le "grip") :
+
+```c
+// Sol : self->skid + brake * 0.25
+self->acceleration = vec3_divf(vec3_sub(forward_velocity, self->velocity), self->skid + brake * 0.25);
+// Air : SHIP_MIN_RESISTANCE + brake * 4 (beaucoup plus lâche)
+self->acceleration = vec3_divf(vec3_sub(forward_velocity, self->velocity), SHIP_MIN_RESISTANCE + brake * 4);
+// Traînée (même formule sol ET air) :
+float resistance = (self->resistance * (SHIP_MAX_RESISTANCE - (brake * 0.125))) * 0.0078125;
+self->acceleration = vec3_sub(self->acceleration, vec3_divf(self->velocity, resistance));
+```
+
+Porté dans `_apply_drive_forces()` : le terme de grip utilise désormais
+`skid + brake_sum * 0.25` au sol et `min_resistance + brake_sum * 4.0` en
+vol (au lieu d'un simple facteur de friction latérale `airborne_lateral_friction`,
+qui a été retiré) ; le terme de traînée `resistance_effective` utilise
+`max_resistance` de façon identique au sol et en vol, comme dans l'original.
+
+### 7. Virage au frein différentiel — contribution transitoire, pas d'inertie
+
+L'original ajoute directement au cap (`angle.y`) une contribution
+proportionnelle à la vitesse et au différentiel de frein, recalculée chaque
+image plutôt qu'accumulée comme une vitesse angulaire persistante :
+
+```c
+float brake_dir = (self->brake_left - self->brake_right) * (0.125 / 4096.0);
+self->angle.y += brake_dir * self->speed * 0.000030517578125 * M_PI * 2 * 30 * system_tick();
+```
+
+Porté via `brake_yaw_rate`, calculé dans `_apply_drive_forces()` et appliqué
+dans `_update_orientation()` en plus de `yaw_velocity`, mais sans jamais être
+intégré dans `yaw_velocity` lui-même : relâcher le frein arrête l'effet
+immédiatement, sans que `turn_damping` ait besoin de le dissiper.
+
 ## Paramètres exposés (`@export`)
 
 | Paramètre | Rôle | Origine C |
@@ -97,6 +150,9 @@ rapport à `thrust_ramp` (40).
 | `roll_yaw_gain` | Gain de banking automatique en fonction du lacet | coefficient de `angular_velocity.y` dans `angular_acceleration.z` |
 | `roll_spring_damping` | Amortissement du ressort de roulis | coefficient `0.5` + auto-nivellement de `angle.z` |
 | `thrust_falloff` | Taux de chute de la poussée | `SHIP_THRUST_FALLOFF` |
+| `ground_gravity_scale` | Ratio de gravité au sol par rapport à la gravité aérienne | `SHIP_ON_TRACK_GRAVITY / SHIP_FLYING_GRAVITY` |
+| `min_resistance` | Diviseur de grip en vol (plus grand = grip plus lâche) | `SHIP_MIN_RESISTANCE` |
+| `max_resistance` | Base du terme de traînée, identique sol/air | `SHIP_MAX_RESISTANCE` |
 
 Ces valeurs restent ajustables directement depuis l'inspecteur Godot pour
 affiner la sensation de conduite sans toucher au code.
@@ -107,5 +163,12 @@ affiner la sensation de conduite sans toucher au code.
   (`ship_collide_with_track`, `ship_resolve_nose_collision`,
   `ship_resolve_wing_collision`) : remplacée par `move_and_slide()` +
   raycasts, architecture fondamentalement différente.
-- Logique de sauvetage (rescue droid) suivant les sections de piste.
+- Logique de sauvetage (rescue droid) suivant les sections de piste et
+  cas particulier `SECTION_JUMP` : l'implémentation Godot n'a pas de
+  structure de sections/faces de piste (`center_line` est une simple
+  `Curve3D`), donc `_rescue_to_track()` ne fait qu'une approximation
+  (retour sur la ligne centrale, `rescue_look_back` en arrière) sans détecter
+  les sauts de piste ni rediriger vers une section d'atterrissage. Porter ce
+  comportement fidèlement demanderait de modéliser les sections de piste,
+  hors périmètre de l'architecture raycast/CharacterBody3D actuelle.
 - Effets de armes/tourbillons liés au gameplay de course (boost, ebolt, etc.).

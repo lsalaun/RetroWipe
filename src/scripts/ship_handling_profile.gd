@@ -10,6 +10,7 @@ class_name ShipHandlingProfile
 @export var nose_pitch_max: float = 2.0
 @export var track_magnet: float = 0.9
 @export var gravity: float = 34.0
+@export var ground_gravity_scale: float = 0.375
 @export var thrust_max: float = 70.0
 @export var thrust_ramp: float = 40.0
 @export var thrust_falloff: float = 20.0
@@ -19,7 +20,6 @@ class_name ShipHandlingProfile
 @export var resistance_brake_scale: float = 1.0
 @export var resistance_k: float = 1.0
 @export var skid: float = 0.35
-@export var airborne_lateral_friction: float = 0.7
 @export var turn_accel: float = 5.8
 @export var turn_reverse_boost: float = 2.0
 @export var turn_damping: float = 3.2
@@ -60,6 +60,7 @@ func apply_to(ship: Node) -> void:
 	ship.nose_pitch_max = nose_pitch_max
 	ship.track_magnet = track_magnet
 	ship.gravity = gravity
+	ship.ground_gravity_scale = ground_gravity_scale
 	ship.thrust_max = thrust_max
 	ship.thrust_ramp = thrust_ramp
 	ship.thrust_falloff = thrust_falloff
@@ -69,7 +70,6 @@ func apply_to(ship: Node) -> void:
 	ship.resistance_brake_scale = resistance_brake_scale
 	ship.resistance_k = resistance_k
 	ship.skid = skid
-	ship.airborne_lateral_friction = airborne_lateral_friction
 	ship.turn_accel = turn_accel
 	ship.turn_reverse_boost = turn_reverse_boost
 	ship.turn_damping = turn_damping

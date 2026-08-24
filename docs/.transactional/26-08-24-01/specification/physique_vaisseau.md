@@ -85,8 +85,8 @@ L'original ralentit la poussée deux fois moins vite qu'il ne l'augmente :
 #define SHIP_THRUST_FALLOFF NTSC_VELOCITY(8) // moitié du taux de rampe
 ```
 
-`thrust_falloff` a été ajusté de 28 à 20 pour respecter ce ratio 2:1 par
-rapport à `thrust_ramp` (40).
+`thrust_falloff` a été ajusté de 28 à 20 pour respecter approximativement ce
+ratio 2:1 par rapport à `thrust_ramp` (42).
 
 ### 5. Gravité différente sol/air
 

@@ -80,23 +80,27 @@ qu'au sol (où le magnet de piste compense la gravité normale).
 
 ## Ce qui est déjà porté dans `wipeout_ship.gd`
 
-D'après [docs/physique_vaisseau.md](../../physique_vaisseau.md), les points 1
-(magnet inverse), 3 (flick asymétrique), 4 (roulis masse-ressort) et 2 (ratio
-thrust 2:1) sont déjà portés avec des paramètres `@export` correspondants
-dans [wipeout_ship.gd](../../../src/scripts/wipeout_ship.gd).
+D'après [docs/physique_vaisseau.md](../../physique_vaisseau.md), l'ensemble
+des points 1 à 7 ci-dessus sont désormais portés avec des paramètres
+`@export` correspondants dans
+[wipeout_ship.gd](../../../src/scripts/wipeout_ship.gd) : sustentation en loi
+d'aimant inverse (1), ratio de poussée 2:1 (2), flick asymétrique au virage +
+survirage au frein différentiel (3), roulis masse-ressort (4), tangage
+nez-qui-plonge (5), grip/résistance différenciés sol/air (6) et gravité
+différente sol/air (7).
 
-## État du portage (mis à jour)
+## Détails d'implémentation
 
 - **Gravité sol/air** : portée via `ground_gravity_scale` (0.375 =
   `SHIP_ON_TRACK_GRAVITY / SHIP_FLYING_GRAVITY`), appliquée à `gravity`
   uniquement au sol, dans `_apply_hover_forces()`.
 - **Résistance/grip différenciés sol/air** : `_apply_drive_forces()` utilise
-  désormais le même diviseur de traînée (`max_resistance`) au sol et en vol
-  comme l'original, et différencie uniquement le diviseur de grip
+  le même diviseur de traînée (`max_resistance`) au sol et en vol comme
+  l'original, et différencie uniquement le diviseur de grip
   (`skid + brake*0.25` au sol vs `min_resistance + brake*4` en vol), en
   remplacement de l'ancien `airborne_lateral_friction` (retiré de
   `WipeoutShip`, `ShipHandlingProfile` et des `.tres`).
-- **Virage au frein différentiel** : `brake_yaw_rate` applique désormais une
+- **Virage au frein différentiel** : `brake_yaw_rate` applique une
   contribution transitoire au cap dans `_update_orientation()`, recalculée
   chaque frame et non accumulée dans `yaw_velocity` — relâcher le frein arrête
   l'effet immédiatement, comme `angle.y += brake_dir * speed * k` dans

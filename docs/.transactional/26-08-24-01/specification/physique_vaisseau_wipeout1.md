@@ -3,8 +3,8 @@
 Principes physiques du vaisseau dans le moteur original
 ([src/wipeout/ship_player.c](../../../../../src/wipeout/ship_player.c) et
 [src/wipeout/ship.h](../../../../../src/wipeout/ship.h)), et état du portage
-dans [wipeout_ship.gd](../../../src/scripts/wipeout_ship.gd) /
-[docs/physique_vaisseau.md](../../physique_vaisseau.md).
+dans [wipeout_ship.gd](../../../../src/scripts/wipeout_ship.gd) /
+[docs/physique_vaisseau.md](physique_vaisseau.md).
 
 ## 1. Sustentation (hover) — loi d'aimant inverse, pas un ressort
 
@@ -80,10 +80,10 @@ qu'au sol (où le magnet de piste compense la gravité normale).
 
 ## Ce qui est déjà porté dans `wipeout_ship.gd`
 
-D'après [docs/physique_vaisseau.md](../../physique_vaisseau.md), l'ensemble
+D'après [docs/physique_vaisseau.md](physique_vaisseau.md), l'ensemble
 des points 1 à 7 ci-dessus sont désormais portés avec des paramètres
 `@export` correspondants dans
-[wipeout_ship.gd](../../../src/scripts/wipeout_ship.gd) : sustentation en loi
+[wipeout_ship.gd](../../../../src/scripts/wipeout_ship.gd) : sustentation en loi
 d'aimant inverse (1), ratio de poussée 2:1 (2), flick asymétrique au virage +
 survirage au frein différentiel (3), roulis masse-ressort (4), tangage
 nez-qui-plonge (5), grip/résistance différenciés sol/air (6) et gravité
@@ -113,4 +113,4 @@ différente sol/air (7).
   comportement fidèlement nécessiterait de modéliser les sections de piste,
   ce qui dépasse le cadre d'un ajustement ciblé de la physique.
 
-Détails et formules dans [docs/physique_vaisseau.md](../../../physique_vaisseau.md#5-gravité-différente-solair).
+Détails et formules dans [docs/physique_vaisseau.md](physique_vaisseau.md#5-gravité-différente-solair).

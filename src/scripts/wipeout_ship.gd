@@ -119,6 +119,18 @@ func _snap_camera_to_ship() -> void:
 	camera_rig.look_at(global_position + forward * 10.0 + global_transform.basis.y * 1.2, Vector3.UP)
 
 
+## Repositions the ship (used when main.gd picks a track at runtime, after
+## spawn_transform was already captured in _ready() with the scene's stale
+## placeholder transform) so resets/rescues target the new spot, not the old one.
+func respawn_at(new_transform: Transform3D) -> void:
+	global_transform = new_transform
+	spawn_transform = new_transform
+	desired_forward = -new_transform.basis.z
+	last_ground_normal = Vector3.UP
+	last_ground_height = global_position.y
+	_snap_camera_to_ship()
+
+
 func _physics_process(delta: float) -> void:
 	if _wants_reset() or global_position.y < last_ground_height - void_fall_margin:
 		_reset_to_spawn()

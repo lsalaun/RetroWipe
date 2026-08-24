@@ -29,5 +29,5 @@ func _ready() -> void:
 		if child is WipeoutShip:
 			child.center_line = center_line
 			if spawn and ship_index < GRID_OFFSETS.size():
-				child.global_transform = spawn.global_transform.translated_local(GRID_OFFSETS[ship_index])
+				child.respawn_at(spawn.global_transform.translated_local(GRID_OFFSETS[ship_index]))
 			ship_index += 1

@@ -9,7 +9,7 @@ func _initialize() -> void:
 	var main := scene.instantiate()
 	root.add_child(main)
 	await physics_frame
-	var track := main.get_node_or_null("Track01") as Node3D
+	var track := main.get_node_or_null("Track") as Node3D
 	var center_line := track.get_node_or_null("CenterLine") as Path3D
 	if center_line == null or center_line.curve == null:
 		push_error("No track center line")

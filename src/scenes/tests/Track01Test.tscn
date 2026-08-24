@@ -1,0 +1,28 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/Track01.tscn" id="1_track"]
+[ext_resource type="PackedScene" uid="uid://cntc2pxmd03rx" path="res://scenes/WipeoutShip.tscn" id="2_ship"]
+[ext_resource type="Script" path="res://scripts/track01_test.gd" id="3_script"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0.05, 0.06, 0.09, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.6, 0.7, 0.8, 1)
+ambient_light_energy = 0.8
+
+[node name="Track01Test" type="Node3D"]
+script = ExtResource("3_script")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 18, 0)
+light_energy = 2.0
+shadow_enabled = true
+
+[node name="Track01" parent="." instance=ExtResource("1_track")]
+
+[node name="Ship" parent="." instance=ExtResource("2_ship")]
+transform = Transform3D(-0.88631, 0, 0.46313, 0, 1, 0, -0.46313, 0, -0.88631, -312.4319248826291, 22.093896713615024, -485.39906103286387)

@@ -5,6 +5,7 @@ for why reads are big-endian and why Y gets negated by default.
 
 from __future__ import annotations
 
+import json
 import struct
 import zlib
 from dataclasses import dataclass
@@ -644,4 +645,220 @@ def parse_prm(data: bytes) -> list[SceneObject]:
         objects.append({"name": name, "origin": origin, "vertices": vertices, "primitives": primitives})
 
     return objects
+
+
+# ---------------------------------------------------------------------------
+# Shared triangle-soup/export helpers for PRM objects with a flat CMP texture
+# list (SCENE.PRM/SKY.PRM/ALLSH.PRM/..., as opposed to LIBRARY.CMP's tiled
+# track textures). Used by convert_track_scenery.py and convert_ships.py.
+
+# object_draw() in object.c renders a primitive's coords in this order (NOT
+# their storage order) -- e.g. `case PRM_TYPE_GT3: ... vertex[coord2],
+# vertex[coord1], vertex[coord0]`, and for quads a 2nd triangle
+# `vertex[coord2], vertex[coord3], vertex[coord1]`.
+PRM_TRI3_ORDER = (2, 1, 0)
+PRM_TRI4_ORDER_A = (2, 1, 0)
+PRM_TRI4_ORDER_B = (2, 3, 1)
+
+
+def emit_prm_object_triangles(
+    world_vertices: list[tuple[float, float, float]],
+    primitives: list[ScenePrimitive],
+    cmp_entries: list[bytes],
+    reverse_winding: bool,
+    texture_dims_cache: dict[int, tuple[int, int]],
+    groups: dict,
+) -> None:
+    """Appends one PRM object's primitives (vertices already in their final
+    output space -- world space for scenery, local space for ship models) into
+    `groups` (keyed by texture id, or None for untextured), matching the
+    engine's object_draw() vertex order and per-vertex color/UV.
+    """
+
+    def texture_size(index: int) -> tuple[int, int]:
+        if index not in texture_dims_cache:
+            w, h, _ = parse_tim(cmp_entries[index])
+            texture_dims_cache[index] = (w, h)
+        return texture_dims_cache[index]
+
+    order = (0, 2, 1) if reverse_winding else (0, 1, 2)
+
+    for prim in primitives:
+        coords = prim["coords"]
+        texture = prim["texture"]
+        colors = [(r / 255.0, g / 255.0, b / 255.0, a / 255.0) for r, g, b, a in prim["colors"]]
+
+        if texture is not None:
+            tex_w, tex_h = texture_size(texture)
+            uvs = [(u / tex_w, v / tex_h) for u, v in prim["uvs"]]
+        else:
+            uvs = [(0.0, 0.0)] * len(coords)
+
+        group = groups.setdefault(texture, {"positions": [], "uvs": [], "colors": []})
+
+        def emit_tri(engine_order: tuple[int, int, int]) -> None:
+            tri_positions = [world_vertices[coords[i]] for i in engine_order]
+            tri_uvs = [uvs[i] for i in engine_order]
+            tri_colors = [colors[i] for i in engine_order]
+            for k in order:
+                group["positions"].append(tri_positions[k])
+                group["uvs"].append(tri_uvs[k])
+                group["colors"].append(tri_colors[k])
+
+        if len(coords) == 3:
+            emit_tri(PRM_TRI3_ORDER)
+        else:
+            emit_tri(PRM_TRI4_ORDER_A)
+            emit_tri(PRM_TRI4_ORDER_B)
+
+
+def export_flat_textures(cmp_entries: list[bytes], texture_ids: set[int], out_dir: Path) -> dict[int, str]:
+    """Writes one PNG per texture id actually used, decoded directly from a
+    flat CMP list (SCENE.CMP/SKY.CMP/ALLSH.CMP/...; no tile assembly, unlike
+    LIBRARY.CMP).
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    texture_files: dict[int, str] = {}
+    for texture_id in sorted(texture_ids):
+        width, height, pixels = parse_tim(cmp_entries[texture_id])
+        filename = f"tex_{texture_id}.png"
+        write_png(out_dir / filename, width, height, pixels)
+        texture_files[texture_id] = filename
+    return texture_files
+
+
+def write_prm_obj(
+    groups: dict,
+    out_path: Path,
+    texture_files: dict[int, str] | None,
+    texture_subdir: str,
+) -> None:
+    """Writes a `groups` dict (from emit_prm_object_triangles) as OBJ+MTL.
+    Untextured groups fall back to a flat averaged Kd (OBJ has no clean
+    per-vertex color story like glTF's COLOR_0).
+    """
+    mtl_path = out_path.with_suffix(".mtl")
+    lines = [f"mtllib {mtl_path.name}"]
+    mtl_lines = []
+
+    vertex_index = 1  # OBJ indices are 1-based
+    for group_id in sorted(groups, key=lambda k: (k is None, k)):
+        group = groups[group_id]
+        positions, uvs, colors = group["positions"], group["uvs"], group["colors"]
+        if not positions:
+            continue
+
+        mat_name = f"tex_{group_id}" if group_id is not None else "vertex_color"
+        avg_color = tuple(sum(c[i] for c in colors) / len(colors) for i in range(3))
+        mtl_lines.append(f"newmtl {mat_name}\nKd {avg_color[0]:.4f} {avg_color[1]:.4f} {avg_color[2]:.4f}")
+        texture_filename = (texture_files or {}).get(group_id)
+        if texture_filename:
+            texture_path = f"{texture_subdir}/{texture_filename}" if texture_subdir else texture_filename
+            mtl_lines.append(f"map_Kd {texture_path}")
+        mtl_lines.append("")
+
+        lines.append(f"g group_{mat_name}")
+        lines.append(f"usemtl {mat_name}")
+
+        for p in positions:
+            lines.append(f"v {p[0]:.6f} {p[1]:.6f} {p[2]:.6f}")
+        for uv in uvs:
+            lines.append(f"vt {uv[0]:.6f} {uv[1]:.6f}")
+
+        for tri in range(len(positions) // 3):
+            a, b, c = (vertex_index + tri * 3 + k for k in range(3))
+            lines.append(f"f {a}/{a} {b}/{b} {c}/{c}")
+        vertex_index += len(positions)
+
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    mtl_path.write_text("\n".join(mtl_lines), encoding="utf-8")
+
+
+def write_prm_gltf(
+    groups: dict,
+    out_path: Path,
+    texture_files: dict[int, str] | None,
+    texture_subdir: str,
+    generator: str = "psx_track_common.py",
+) -> None:
+    """Writes a `groups` dict (from emit_prm_object_triangles) as glTF, with
+    per-vertex COLOR_0 in addition to any texture.
+    """
+    bin_path = out_path.with_suffix(".bin")
+    buffer_bytes = bytearray()
+    buffer_views = []
+    accessors = []
+    materials = []
+    primitives = []
+    images = []
+    textures = []
+    image_index_by_id: dict[int, int] = {}
+
+    def push_floats(values: list[tuple[float, ...]], component_count: int, want_bounds: bool) -> int:
+        offset = len(buffer_bytes)
+        flat = [c for v in values for c in v]
+        buffer_bytes.extend(struct.pack(f"<{len(flat)}f", *flat))
+        buffer_views.append({"buffer": 0, "byteOffset": offset, "byteLength": len(flat) * 4, "target": 34962})
+        accessor = {
+            "bufferView": len(buffer_views) - 1,
+            "componentType": 5126,  # FLOAT
+            "count": len(values),
+            "type": {2: "VEC2", 3: "VEC3", 4: "VEC4"}[component_count],
+        }
+        if want_bounds:
+            cols = list(zip(*values))
+            accessor["min"] = [min(c) for c in cols]
+            accessor["max"] = [max(c) for c in cols]
+        accessors.append(accessor)
+        return len(accessors) - 1
+
+    for group_id in sorted(groups, key=lambda k: (k is None, k)):
+        group = groups[group_id]
+        positions, uvs, colors = group["positions"], group["uvs"], group["colors"]
+        if not positions:
+            continue
+
+        pos_idx = push_floats(positions, 3, want_bounds=True)
+        uv_idx = push_floats(uvs, 2, want_bounds=False)
+        color_idx = push_floats(colors, 4, want_bounds=False)
+
+        material: dict = {
+            "name": f"tex_{group_id}" if group_id is not None else "vertex_color",
+            "pbrMetallicRoughness": {"baseColorFactor": [1, 1, 1, 1]},
+        }
+        texture_filename = (texture_files or {}).get(group_id)
+        if texture_filename:
+            if group_id not in image_index_by_id:
+                uri = f"{texture_subdir}/{texture_filename}" if texture_subdir else texture_filename
+                images.append({"uri": uri})
+                textures.append({"source": len(images) - 1})
+                image_index_by_id[group_id] = len(textures) - 1
+            material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": image_index_by_id[group_id]}
+        materials.append(material)
+
+        primitives.append(
+            {
+                "attributes": {"POSITION": pos_idx, "TEXCOORD_0": uv_idx, "COLOR_0": color_idx},
+                "material": len(materials) - 1,
+                "mode": 4,  # TRIANGLES
+            }
+        )
+
+    gltf = {
+        "asset": {"version": "2.0", "generator": generator},
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"mesh": 0}],
+        "meshes": [{"primitives": primitives}],
+        "materials": materials,
+        "accessors": accessors,
+        "bufferViews": buffer_views,
+        "buffers": [{"uri": bin_path.name, "byteLength": len(buffer_bytes)}],
+    }
+    if images:
+        gltf["images"] = images
+        gltf["textures"] = textures
+
+    bin_path.write_bytes(bytes(buffer_bytes))
+    out_path.write_text(json.dumps(gltf), encoding="utf-8")
 

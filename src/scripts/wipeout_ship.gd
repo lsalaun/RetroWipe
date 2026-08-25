@@ -127,7 +127,13 @@ func set_ship_model(model_scene: PackedScene) -> void:
 		return
 
 	body_mesh.visible = false
-	ship_visual.add_child(model_scene.instantiate())
+	var instance := model_scene.instantiate()
+	# Source PRM ship models use +Z as the nose/forward direction (see
+	# ship_nose() in ship.c: vec3(0, 0, 512) transformed by the ship's own
+	# matrix), while Godot/WipeoutShip treat -Z as forward -- rotate 180°
+	# around Y to match, otherwise the model faces backward on the track.
+	instance.rotate_y(PI)
+	ship_visual.add_child(instance)
 
 
 ## CameraRig has top_level = true so it doesn't inherit the ship's transform;

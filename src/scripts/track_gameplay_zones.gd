@@ -1,11 +1,14 @@
 extends Node3D
 class_name TrackGameplayZones
 
-## Spawns Marker3D placeholders for the weapon pickup pads, speed boost pads
-## and start grid faces exported by godot/tools/psx_track/
+## Spawns gameplay triggers/anchors from the weapon pickup pads, speed boost
+## pads and start grid faces exported by godot/tools/psx_track/
 ## convert_track_face_flags.py (see that script's docstring for the source
-## TRACK.TRF flags). No gameplay behavior is attached yet -- these are meant
-## as anchor points for a future pickup/boost system to hook into.
+## TRACK.TRF flags). Boost pads are functional (see track_boost_pad.gd);
+## pickup pads and start grid are still plain Marker3D anchors, waiting on a
+## weapon pickup system to hook into.
+
+const TrackBoostPad = preload("res://scripts/track_boost_pad.gd")
 
 @export_file("*.json") var source_json: String = ""
 
@@ -20,8 +23,25 @@ func _ready() -> void:
 		return
 
 	_spawn_markers(parsed.get("pickup_pads", []), "PickupPads", "PickupPad")
-	_spawn_markers(parsed.get("boost_pads", []), "BoostPads", "BoostPad")
+	_spawn_boost_pads(parsed.get("boost_pads", []))
 	_spawn_markers(parsed.get("start_grid", []), "StartGrid", "StartGridFace")
+
+
+func _spawn_boost_pads(entries: Array) -> void:
+	if entries.is_empty():
+		return
+
+	var group := Node3D.new()
+	group.name = "BoostPads"
+	add_child(group)
+
+	for i in entries.size():
+		var entry: Dictionary = entries[i]
+		var center: Array = entry.get("center", [0.0, 0.0, 0.0])
+		var pad := TrackBoostPad.new()
+		pad.name = "BoostPad_%d" % int(entry.get("face_index", i))
+		pad.position = Vector3(center[0], center[1], center[2])
+		group.add_child(pad)
 
 
 func _spawn_markers(entries: Array, group_name: String, marker_prefix: String) -> void:

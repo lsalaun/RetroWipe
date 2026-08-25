@@ -69,6 +69,7 @@ class HoverSample:
 @export var center_line: Path3D # track center line used to rescue the ship back onto the track
 @export var is_player_controlled: bool = true
 @export var handling: Resource
+@export var ship_model_scene: PackedScene # imported ship .glb (see tools/psx_track/convert_ships.py); null keeps the placeholder BodyMesh
 
 @onready var hover_points: Array[RayCast3D] = [
 	$HoverFrontLeft,
@@ -79,6 +80,7 @@ class HoverSample:
 @onready var body_mesh: MeshInstance3D = $BodyMesh
 @onready var camera_rig: Node3D = $CameraRig
 @onready var hull_area: Area3D = $HullArea
+@onready var ship_visual: Node3D = $ShipVisual
 
 var thrust_mag: float = 0.0
 var reverse_brake: float = 0.0
@@ -109,6 +111,23 @@ func _ready() -> void:
 	last_ground_normal = Vector3.UP
 	last_ground_height = global_position.y
 	_snap_camera_to_ship()
+	if ship_model_scene != null:
+		set_ship_model(ship_model_scene)
+
+
+## Swaps the visible hull for an imported ship model, hiding the placeholder
+## BodyMesh. Pass null to revert to the placeholder.
+func set_ship_model(model_scene: PackedScene) -> void:
+	for child in ship_visual.get_children():
+		child.queue_free()
+
+	ship_model_scene = model_scene
+	if model_scene == null:
+		body_mesh.visible = true
+		return
+
+	body_mesh.visible = false
+	ship_visual.add_child(model_scene.instantiate())
 
 
 ## CameraRig has top_level = true so it doesn't inherit the ship's transform;

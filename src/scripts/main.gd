@@ -30,4 +30,6 @@ func _ready() -> void:
 			child.center_line = center_line
 			if spawn and ship_index < GRID_OFFSETS.size():
 				child.respawn_at(spawn.global_transform.translated_local(GRID_OFFSETS[ship_index]))
+			if child.is_player_controlled and ShipSelection.selected_ship_scene != null:
+				child.set_ship_model(ShipSelection.selected_ship_scene)
 			ship_index += 1

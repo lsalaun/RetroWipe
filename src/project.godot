@@ -22,6 +22,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 TrackSelection="*res://scripts/track_selection.gd"
+ShipSelection="*res://scripts/ship_selection.gd"
 
 [display]
 

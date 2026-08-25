@@ -16,4 +16,4 @@ func _ready() -> void:
 
 func _on_track_selected(scene_path: String) -> void:
 	TrackSelection.select_track(scene_path)
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	get_tree().change_scene_to_file("res://scenes/ShipSelectionMenu.tscn")

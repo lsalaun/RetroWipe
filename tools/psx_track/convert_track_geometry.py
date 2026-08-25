@@ -60,23 +60,22 @@ from __future__ import annotations
 import argparse
 import json
 import struct
-from dataclasses import dataclass
 from pathlib import Path
 
 from psx_track_common import (
     DEFAULT_UNITS_PER_METER,
+    FACE_FLIP_TEXTURE,
+    Face,
     build_tile_texture,
     make_axis_transform,
     parse_cmp,
+    parse_trf,
+    parse_trv,
     parse_ttf,
     scale_point,
     write_png,
 )
 
-VERTEX_STRUCT = struct.Struct(">3i4x")  # x, y, z (int32, big-endian), 4 bytes padding
-FACE_STRUCT = struct.Struct(">4h3hBBI")  # v0..v3, nx,ny,nz, texture, flags, color (big-endian)
-
-FACE_FLIP_TEXTURE = 1 << 2
 TILE_SIZE = 128.0
 
 # Matches wipeout-rewrite's track_uv[] table in track.c, indexed [flip][corner].
@@ -84,33 +83,6 @@ TILE_UV = [
     [(128, 0), (0, 0), (0, 128), (128, 128)],
     [(0, 0), (128, 0), (128, 128), (0, 128)],
 ]
-
-
-@dataclass
-class Face:
-    indices: tuple[int, int, int, int]
-    normal: tuple[float, float, float]
-    texture: int
-    flags: int
-
-
-def parse_trv(path: Path) -> list[tuple[float, float, float]]:
-    data = path.read_bytes()
-    count = len(data) // VERTEX_STRUCT.size
-    return [VERTEX_STRUCT.unpack_from(data, i * VERTEX_STRUCT.size) for i in range(count)]
-
-
-def parse_trf(path: Path) -> list[Face]:
-    data = path.read_bytes()
-    count = len(data) // FACE_STRUCT.size
-    faces = []
-    for i in range(count):
-        v0, v1, v2, v3, nx, ny, nz, texture, flags, _color = FACE_STRUCT.unpack_from(
-            data, i * FACE_STRUCT.size
-        )
-        normal = (nx / 4096.0, ny / 4096.0, nz / 4096.0)
-        faces.append(Face((v0, v1, v2, v3), normal, texture, flags))
-    return faces
 
 
 def build_triangle_soup(

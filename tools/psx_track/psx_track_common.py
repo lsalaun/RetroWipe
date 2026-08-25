@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import struct
 import zlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TypedDict
 
@@ -39,6 +40,51 @@ def scale_point(v: tuple[float, float, float], units_per_meter: float) -> tuple[
     longer unit-length.
     """
     return (v[0] / units_per_meter, v[1] / units_per_meter, v[2] / units_per_meter)
+
+
+# ---------------------------------------------------------------------------
+# TRACK.TRV / TRACK.TRF parsing, shared by convert_track_geometry.py and
+# convert_track_face_flags.py. See convert_track_geometry.py's module
+# docstring for the exact binary layout and why reads are big-endian.
+
+FACE_TRACK_BASE       = 1 << 0
+FACE_PICKUP_LEFT      = 1 << 1
+FACE_FLIP_TEXTURE     = 1 << 2
+FACE_PICKUP_RIGHT     = 1 << 3
+FACE_START_GRID       = 1 << 4
+FACE_BOOST            = 1 << 5
+FACE_PICKUP_COLLECTED = 1 << 6
+FACE_PICKUP_ACTIVE    = 1 << 7
+
+VERTEX_STRUCT = struct.Struct(">3i4x")  # x, y, z (int32, big-endian), 4 bytes padding
+FACE_STRUCT = struct.Struct(">4h3hBBI")  # v0..v3, nx,ny,nz, texture, flags, color (big-endian)
+
+
+@dataclass
+class Face:
+    indices: tuple[int, int, int, int]
+    normal: tuple[float, float, float]
+    texture: int
+    flags: int
+
+
+def parse_trv(path: Path) -> list[tuple[float, float, float]]:
+    data = path.read_bytes()
+    count = len(data) // VERTEX_STRUCT.size
+    return [VERTEX_STRUCT.unpack_from(data, i * VERTEX_STRUCT.size) for i in range(count)]
+
+
+def parse_trf(path: Path) -> list[Face]:
+    data = path.read_bytes()
+    count = len(data) // FACE_STRUCT.size
+    faces = []
+    for i in range(count):
+        v0, v1, v2, v3, nx, ny, nz, texture, flags, _color = FACE_STRUCT.unpack_from(
+            data, i * FACE_STRUCT.size
+        )
+        normal = (nx / 4096.0, ny / 4096.0, nz / 4096.0)
+        faces.append(Face((v0, v1, v2, v3), normal, texture, flags))
+    return faces
 
 
 # ---------------------------------------------------------------------------
@@ -295,3 +341,307 @@ def write_png(path: Path, width: int, height: int, rgba: bytes) -> None:
     png += chunk(b"IDAT", zlib.compress(bytes(raw), 9))
     png += chunk(b"IEND", b"")
     path.write_bytes(png)
+
+
+# ---------------------------------------------------------------------------
+# Scenery objects (SCENE.PRM/SKY.PRM + SCENE.CMP/SKY.CMP).
+#
+# Port of objects_load() in wipeout-rewrite's src/wipeout/object.c. All
+# reads are big-endian (get_i16()/get_i32()), like TRACK.TRV/TRF/TRS -- see
+# convert_track_geometry.py's module docstring for why. Unlike LIBRARY.CMP
+# (a tiled texture atlas indexed per track face), SCENE.CMP/SKY.CMP are a
+# flat list of standalone textures -- see image_get_compressed_textures() in
+# image.c -- so each `texture` index here maps 1:1 to a parse_cmp() entry,
+# decoded directly with parse_tim(), no tile assembly needed.
+
+PRM_TYPE_F3 = 1
+PRM_TYPE_FT3 = 2
+PRM_TYPE_F4 = 3
+PRM_TYPE_FT4 = 4
+PRM_TYPE_G3 = 5
+PRM_TYPE_GT3 = 6
+PRM_TYPE_G4 = 7
+PRM_TYPE_GT4 = 8
+PRM_TYPE_LF2 = 9  # defined upstream but never emitted by any real asset
+PRM_TYPE_TSPR = 10
+PRM_TYPE_BSPR = 11
+PRM_TYPE_LSF3 = 12
+PRM_TYPE_LSFT3 = 13
+PRM_TYPE_LSF4 = 14
+PRM_TYPE_LSFT4 = 15
+PRM_TYPE_LSG3 = 16
+PRM_TYPE_LSGT3 = 17
+PRM_TYPE_LSG4 = 18
+PRM_TYPE_LSGT4 = 19
+PRM_TYPE_SPLINE = 20
+PRM_TYPE_INFINITE_LIGHT = 21
+PRM_TYPE_POINT_LIGHT = 22
+PRM_TYPE_SPOT_LIGHT = 23
+
+
+class ScenePrimitive(TypedDict):
+    type: int
+    coords: list[int]  # indices into the object's vertex list
+    texture: int | None  # index into the CMP's flat texture list, or None if untextured
+    uvs: list[tuple[int, int]]  # raw 0..255 texel bytes, one per coord (only if textured)
+    colors: list[tuple[int, int, int, int]]  # one per coord
+
+
+class SceneObject(TypedDict):
+    name: str
+    origin: tuple[float, float, float]
+    vertices: list[tuple[float, float, float]]
+    primitives: list[ScenePrimitive]
+
+
+class _Cursor:
+    """Sequential big-endian reader mirroring utils.h's get_i16()/get_i32()."""
+
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+        self.pos = 0
+
+    def i16(self) -> int:
+        v = struct.unpack_from(">h", self.data, self.pos)[0]
+        self.pos += 2
+        return v
+
+    def u8(self) -> int:
+        v = self.data[self.pos]
+        self.pos += 1
+        return v
+
+    def i32(self) -> int:
+        v = struct.unpack_from(">i", self.data, self.pos)[0]
+        self.pos += 4
+        return v
+
+    def u32(self) -> int:
+        v = struct.unpack_from(">I", self.data, self.pos)[0]
+        self.pos += 4
+        return v
+
+    def skip(self, n: int) -> None:
+        self.pos += n
+
+
+def _read_color(cur: _Cursor) -> tuple[int, int, int, int]:
+    # rgba_from_u32(): r/g/b are the top 3 bytes of the u32; alpha is always
+    # opaque (the 4th byte in the file is discarded, matching the engine).
+    v = cur.u32()
+    return ((v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, 255)
+
+
+def _read_primitive(cur: _Cursor, prm_type: int) -> ScenePrimitive | None:
+    """Port of the big switch in objects_load(). Returns None for primitive
+    types that carry no mesh geometry (sprites/splines/lights); the cursor is
+    still advanced past their fields so the primitive stream stays aligned.
+    """
+    if prm_type == PRM_TYPE_F3:
+        coords = [cur.i16() for _ in range(3)]
+        cur.skip(2)  # pad1
+        color = _read_color(cur)
+        return {"type": prm_type, "coords": coords, "texture": None, "uvs": [], "colors": [color] * 3}
+
+    if prm_type == PRM_TYPE_F4:
+        coords = [cur.i16() for _ in range(4)]
+        color = _read_color(cur)
+        return {"type": prm_type, "coords": coords, "texture": None, "uvs": [], "colors": [color] * 4}
+
+    if prm_type == PRM_TYPE_FT3:
+        coords = [cur.i16() for _ in range(3)]
+        texture = cur.i16()
+        cur.skip(4)  # cba, tsb
+        uvs = [(cur.u8(), cur.u8()) for _ in range(3)]
+        cur.skip(2)  # pad1
+        color = _read_color(cur)
+        return {"type": prm_type, "coords": coords, "texture": texture, "uvs": uvs, "colors": [color] * 3}
+
+    if prm_type == PRM_TYPE_FT4:
+        coords = [cur.i16() for _ in range(4)]
+        texture = cur.i16()
+        cur.skip(4)  # cba, tsb
+        uvs = [(cur.u8(), cur.u8()) for _ in range(4)]
+        cur.skip(2)  # pad1
+        color = _read_color(cur)
+        return {"type": prm_type, "coords": coords, "texture": texture, "uvs": uvs, "colors": [color] * 4}
+
+    if prm_type == PRM_TYPE_G3:
+        coords = [cur.i16() for _ in range(3)]
+        cur.skip(2)  # pad1
+        colors = [_read_color(cur) for _ in range(3)]
+        return {"type": prm_type, "coords": coords, "texture": None, "uvs": [], "colors": colors}
+
+    if prm_type == PRM_TYPE_G4:
+        coords = [cur.i16() for _ in range(4)]
+        colors = [_read_color(cur) for _ in range(4)]
+        return {"type": prm_type, "coords": coords, "texture": None, "uvs": [], "colors": colors}
+
+    if prm_type == PRM_TYPE_GT3:
+        coords = [cur.i16() for _ in range(3)]
+        texture = cur.i16()
+        cur.skip(4)  # cba, tsb
+        uvs = [(cur.u8(), cur.u8()) for _ in range(3)]
+        cur.skip(2)  # pad1
+        colors = [_read_color(cur) for _ in range(3)]
+        return {"type": prm_type, "coords": coords, "texture": texture, "uvs": uvs, "colors": colors}
+
+    if prm_type == PRM_TYPE_GT4:
+        coords = [cur.i16() for _ in range(4)]
+        texture = cur.i16()
+        cur.skip(4)  # cba, tsb
+        uvs = [(cur.u8(), cur.u8()) for _ in range(4)]
+        cur.skip(2)  # pad1
+        colors = [_read_color(cur) for _ in range(4)]
+        return {"type": prm_type, "coords": coords, "texture": texture, "uvs": uvs, "colors": colors}
+
+    if prm_type == PRM_TYPE_LSF3:
+        coords = [cur.i16() for _ in range(3)]
+        cur.skip(2)  # normal index (lighting only, not needed for static geometry)
+        color = _read_color(cur)
+        return {"type": prm_type, "coords": coords, "texture": None, "uvs": [], "colors": [color] * 3}
+
+    if prm_type == PRM_TYPE_LSF4:
+        coords = [cur.i16() for _ in range(4)]
+        cur.skip(2)  # normal index
+        cur.skip(2)  # pad1
+        color = _read_color(cur)
+        return {"type": prm_type, "coords": coords, "texture": None, "uvs": [], "colors": [color] * 4}
+
+    if prm_type == PRM_TYPE_LSFT3:
+        coords = [cur.i16() for _ in range(3)]
+        cur.skip(2)  # normal index
+        texture = cur.i16()
+        cur.skip(4)  # cba, tsb
+        uvs = [(cur.u8(), cur.u8()) for _ in range(3)]
+        color = _read_color(cur)  # no pad1 for this type
+        return {"type": prm_type, "coords": coords, "texture": texture, "uvs": uvs, "colors": [color] * 3}
+
+    if prm_type == PRM_TYPE_LSFT4:
+        coords = [cur.i16() for _ in range(4)]
+        cur.skip(2)  # normal index
+        texture = cur.i16()
+        cur.skip(4)  # cba, tsb
+        uvs = [(cur.u8(), cur.u8()) for _ in range(4)]
+        color = _read_color(cur)  # no pad1 for this type
+        return {"type": prm_type, "coords": coords, "texture": texture, "uvs": uvs, "colors": [color] * 4}
+
+    if prm_type == PRM_TYPE_LSG3:
+        coords = [cur.i16() for _ in range(3)]
+        cur.skip(6)  # 3 normal indices
+        colors = [_read_color(cur) for _ in range(3)]
+        return {"type": prm_type, "coords": coords, "texture": None, "uvs": [], "colors": colors}
+
+    if prm_type == PRM_TYPE_LSG4:
+        coords = [cur.i16() for _ in range(4)]
+        cur.skip(8)  # 4 normal indices
+        colors = [_read_color(cur) for _ in range(4)]
+        return {"type": prm_type, "coords": coords, "texture": None, "uvs": [], "colors": colors}
+
+    if prm_type == PRM_TYPE_LSGT3:
+        coords = [cur.i16() for _ in range(3)]
+        cur.skip(6)  # 3 normal indices
+        texture = cur.i16()
+        cur.skip(4)  # cba, tsb
+        uvs = [(cur.u8(), cur.u8()) for _ in range(3)]
+        colors = [_read_color(cur) for _ in range(3)]  # no pad1 for this type
+        return {"type": prm_type, "coords": coords, "texture": texture, "uvs": uvs, "colors": colors}
+
+    if prm_type == PRM_TYPE_LSGT4:
+        coords = [cur.i16() for _ in range(4)]
+        cur.skip(8)  # 4 normal indices
+        texture = cur.i16()
+        cur.skip(4)  # cba, tsb
+        uvs = [(cur.u8(), cur.u8()) for _ in range(4)]
+        cur.skip(2)  # pad1 (this variant does have one)
+        colors = [_read_color(cur) for _ in range(4)]
+        return {"type": prm_type, "coords": coords, "texture": texture, "uvs": uvs, "colors": colors}
+
+    if prm_type in (PRM_TYPE_TSPR, PRM_TYPE_BSPR):
+        cur.skip(2 + 2 + 2)  # coord, width, height
+        cur.skip(2)  # texture -- billboards aren't exported as mesh geometry (yet)
+        cur.skip(4)  # color
+        return None
+
+    if prm_type == PRM_TYPE_SPLINE:
+        cur.skip((4 * 3 + 4) * 3)  # control1, position, control2 (i32 vec3 + 4 bytes padding, x3)
+        cur.skip(4)  # color
+        return None
+
+    if prm_type == PRM_TYPE_POINT_LIGHT:
+        cur.skip(4 * 3 + 4)  # position + padding
+        cur.skip(4)  # color
+        cur.skip(2 + 2)  # startFalloff, endFalloff
+        return None
+
+    if prm_type == PRM_TYPE_SPOT_LIGHT:
+        cur.skip(4 * 3 + 4)  # position + padding
+        cur.skip(2 * 3 + 2)  # direction + padding
+        cur.skip(4)  # color
+        cur.skip(2 * 4)  # startFalloff, endFalloff, coneAngle, spreadAngle
+        return None
+
+    if prm_type == PRM_TYPE_INFINITE_LIGHT:
+        cur.skip(2 * 3 + 2)  # direction + padding
+        cur.skip(4)  # color
+        return None
+
+    raise ValueError(f"Unsupported PRM primitive type {prm_type} at offset {cur.pos}")
+
+
+def parse_prm(data: bytes) -> list[SceneObject]:
+    """Port of objects_load(): a PRM file is a flat list of Objects back to
+    back, each with its own vertex/primitive arrays (normals are parsed only
+    to advance the cursor -- Godot recomputes its own shading normals, so
+    they aren't carried into the output).
+    """
+    cur = _Cursor(data)
+    objects: list[SceneObject] = []
+
+    while cur.pos < len(data):
+        name = data[cur.pos:cur.pos + 16].split(b"\x00", 1)[0].decode("ascii", errors="replace")
+        cur.skip(16)
+
+        vertices_len = cur.i16()
+        cur.skip(2)  # padding
+        cur.skip(4)  # vertices pointer (runtime only)
+        normals_len = cur.i16()
+        cur.skip(2)  # padding
+        cur.skip(4)  # normals pointer (runtime only)
+        primitives_len = cur.i16()
+        cur.skip(2)  # padding
+        cur.skip(4)  # primitives pointer (runtime only)
+        cur.skip(4 * 3)  # two unnamed fields + skeleton ref (runtime only)
+        cur.skip(4)  # extent
+        cur.skip(2)
+        cur.skip(2)  # flags + padding
+        cur.skip(4)  # next pointer (runtime only)
+        cur.skip(3 * 3 * 2 + 2)  # relative rotation matrix + padding
+
+        origin = (float(cur.i32()), float(cur.i32()), float(cur.i32()))
+
+        cur.skip(3 * 3 * 2 + 2)  # absolute rotation matrix + padding
+        cur.skip(3 * 4)  # absolute translation matrix
+        cur.skip(2 + 2)  # skeleton update flag + padding
+        cur.skip(4 * 3)  # skeleton super/sub/next (runtime only)
+
+        vertices = []
+        for _ in range(vertices_len):
+            x, y, z = cur.i16(), cur.i16(), cur.i16()
+            cur.skip(2)
+            vertices.append((float(x), float(y), float(z)))
+
+        cur.skip(normals_len * 8)  # normals: i16 x,y,z + 2 bytes padding each
+
+        primitives: list[ScenePrimitive] = []
+        for _ in range(primitives_len):
+            prm_type = cur.i16()
+            cur.skip(2)  # flag
+            prim = _read_primitive(cur, prm_type)
+            if prim is not None:
+                primitives.append(prim)
+
+        objects.append({"name": name, "origin": origin, "vertices": vertices, "primitives": primitives})
+
+    return objects
+

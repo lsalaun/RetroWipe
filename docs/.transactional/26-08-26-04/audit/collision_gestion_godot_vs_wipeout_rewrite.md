@@ -51,11 +51,11 @@ Les rayons trop horizontaux (`|normal.y| < 0.5`) sont ignorés pour le sol : ce 
 
 **C** : 3 points (nez, aile G, aile D) vs plan de la face mur de la **section courante** ; reflect + recul + `v *= 0.5` + éjection le long de la normale ; yaw (nez) ou roll (aile). `last_impact_time` ne gate que le SFX.
 
-**Godot** : hit mural si `|normal.y| ≤ 0.45` sur un **probe latéral** (`WallNose` puis ailes) ; bounce `* 0.35` + `wall_push_speed` ; yaw nez / roll aile selon `kind` (`nose` / `wing_left` / `wing_right`) ; cooldown 0.12 s sur **toute** la résolution.
+**Godot** : hit mural si `|normal.y| ≤ 0.45` sur un **probe latéral** (`WallNose` puis ailes) ; bounce `* 0.35` + `wall_push_speed` ; yaw nez / roll aile selon `kind` (`nose` / `wing_left` / `wing_right`) ; cooldown 0.12 s désormais limité à l’impulsion de rotation (yaw/roll), l’éjection (bounce/push/damping) se résout **chaque frame** où le probe touche, cooldown ou non.
 
-C’est une **adaptation** : même split nez/aile, autre détection (rayons horizontaux vs trimesh, pas points vs plan TRF). Le cooldown Godot évite le jitter sur trimesh ; le C n’en a pas besoin parce qu’il résout contre une seule face par frame.
+C’est une **adaptation** : même split nez/aile, autre détection (rayons horizontaux vs trimesh, pas points vs plan TRF). Le cooldown Godot évite le spam de yaw/roll sur trimesh ; le C n’en a pas besoin parce qu’il résout contre une seule face par frame.
 
-**Statut** : probes latéraux en place (joueur + IA). Feel encore à retuner (cooldown trop agressif, voir écart 2).
+**Statut** : probes latéraux en place (joueur + IA). Cooldown restreint au yaw/roll (voir écart 2, fait) ; l’éjection ne peut plus laisser traverser un mur fin pendant le cooldown.
 
 ### 3. Vaisseau–vaisseau
 
@@ -94,7 +94,7 @@ Un pad continu (tant que overlap) resterait Godot-idiomatic et plus proche du C 
 Ce sont des **trous d’adaptation**, pas des absences de code C.
 
 1. **Murs** : ~~rayons de hover trop pauvres~~ **fait** — probes `WallNose` / `WallWingLeft` / `WallWingRight` (`_sample_wall_probe`, nez d’abord). Hover rays inchangés (sol uniquement).
-2. **Cooldown mural** trop agressif → peut laisser traverser un mur fin ; le réduire ou n’appliquer le cooldown qu’au SFX / yaw, pas à l’éjection.
+2. ~~**Cooldown mural** trop agressif → peut laisser traverser un mur fin~~ **fait** — `_handle_wall_collisions` résout maintenant le bounce/push/damping à chaque frame de contact ; seule l’impulsion de rotation (yaw nez / roll aile) reste gatée par `wall_impact_cooldown_duration` (0.12 s).
 3. **Hull inerte** : normal pour un `Node3D` cinématique ; si pénétration, corriger par probes, pas par `CharacterBody3D.move_and_slide` (ça changerait le feel).
 4. **Ship–ship** : AABB plus large que `alcol.prm` → retuner la boîte.
 5. **Track 12** : brancher `GameplayZones` + `track_*_face_flags.json` comme Track 01 / 02.
@@ -109,7 +109,7 @@ Ce sont des **trous d’adaptation**, pas des absences de code C.
 |---|---|---|---|
 | Collider piste trimesh + backface | Fait, bon choix | Solide | Garder ; ne pas passer en convex |
 | Hover / bounce sol | Fait | Proche | Fine-tune constantes |
-| Murs nez / aile | Fait (probes latéraux) | À retuner | Cooldown / SFX |
+| Murs nez / aile | Fait (probes latéraux + éjection non gatée par le cooldown) | Proche | SFX |
 | Vaisseau–vaisseau | Fait (Area3D) | Moyen | Retuner HullArea |
 | Boost | Fait (Area3D) | Plus faible (one-shot) | Overlap continu |
 | Jonctions TRF | Non porté, volontaire | N/A | Trimesh suffit |
@@ -130,10 +130,9 @@ Ne pas réintroduire :
 
 Priorités d’adaptation :
 
-1. Probes muraux latéraux (nez / ailes) contre le trimesh.
-2. `GameplayZones` sur Track 12.
-3. Boost tant que overlap.
-4. SFX d’impact via nœuds audio.
+1. `GameplayZones` sur Track 12.
+2. Boost tant que overlap.
+3. SFX d’impact via nœuds audio.
 
 ---
 

@@ -363,8 +363,6 @@ func _apply_drive_forces(up: Vector3, steer: float, pitch_input: float, grounded
 
 func _handle_wall_collisions(up: Vector3, delta: float) -> void:
 	wall_impact_cooldown = maxf(wall_impact_cooldown - delta, 0.0)
-	if wall_impact_cooldown > 0.0:
-		return
 
 	var hit := _sample_wall_probe()
 	if hit.is_empty():
@@ -377,13 +375,23 @@ func _handle_wall_collisions(up: Vector3, delta: float) -> void:
 	var is_nose: bool = hit["kind"] == &"nose"
 	var lateral_offset := best_contact_offset.dot(right)
 	var speed := velocity.length()
+	var wing_sign := 0.0 if is_nose else (-1.0 if hit["kind"] == &"wing_left" else 1.0)
 
 	# Stronger Wipeout-style impact response: quick bounce, heavy loss of forward
-	# momentum, and a deliberate push away from the wall to avoid sticking.
+	# momentum, and a deliberate push away from the wall to avoid sticking. This
+	# ejection always resolves, cooldown or not, so a thin wall can't be clipped
+	# through while the cooldown is active; only the rotational kick below (and
+	# any future impact SFX) is throttled by it.
 	var rebound_scale := 0.35
 	velocity = velocity.bounce(best_normal) * rebound_scale
 	velocity += best_normal * wall_push_speed
 	velocity -= forward * clampf(speed * 0.12, 0.0, 18.0)
+	if not is_nose:
+		velocity *= wall_wing_extra_damping
+		velocity -= right * wing_sign * minf(absf(lateral_offset) * 0.8, 8.0)
+
+	if wall_impact_cooldown > 0.0:
+		return
 
 	if is_nose:
 		var yaw_magnitude := speed * wall_nose_yaw_k1 + wall_nose_yaw_k2
@@ -391,12 +399,10 @@ func _handle_wall_collisions(up: Vector3, delta: float) -> void:
 	else:
 		var impact_angle := best_contact_offset.angle_to(forward)
 		var roll_magnitude := impact_angle * speed * wall_wing_roll_k
-		var wing_sign := -1.0 if hit["kind"] == &"wing_left" else 1.0
 		roll_rate += wing_sign * roll_magnitude
-		velocity *= wall_wing_extra_damping
-		velocity -= right * wing_sign * minf(absf(lateral_offset) * 0.8, 8.0)
 
 	wall_impact_cooldown = wall_impact_cooldown_duration
+
 
 
 ## Nose first, then wings — same priority as ship_collide_with_track().

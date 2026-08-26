@@ -117,6 +117,12 @@ var grounded_grace_timer: float = 0.0
 var spawn_transform: Transform3D
 var velocity: Vector3 = Vector3.ZERO
 var camera_velocity: Vector3 = Vector3.ZERO # spring state, ported from camera_t.velocity
+var race_progress: float = 0.0 # lap * curve_length + offset; analog of ship_t.total_section_num
+var lap: int = 0
+var on_left_side: bool = false
+var just_in_front: bool = false
+var position_rank: int = 8
+var _last_curve_offset: float = -1.0
 
 
 func _ready() -> void:
@@ -199,6 +205,7 @@ func respawn_at(new_transform: Transform3D) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_update_race_progress()
 	if _wants_reset() or global_position.y < last_ground_height - void_fall_margin:
 		_reset_to_spawn()
 		return
@@ -643,6 +650,34 @@ func _rescue_to_track() -> void:
 	_reset_dynamic_state()
 	desired_forward = forward
 	last_ground_height = target_position.y
+
+
+func _update_race_progress() -> void:
+	if center_line == null or center_line.curve == null or center_line.curve.point_count < 2:
+		return
+
+	var curve := center_line.curve
+	var curve_length := maxf(curve.get_baked_length(), 0.001)
+	var local_pos := center_line.to_local(global_position)
+	var offset := curve.get_closest_offset(local_pos)
+	if _last_curve_offset >= 0.0:
+		if _last_curve_offset > curve_length * 0.75 and offset < curve_length * 0.25:
+			lap += 1
+		elif _last_curve_offset < curve_length * 0.25 and offset > curve_length * 0.75:
+			lap -= 1
+	_last_curve_offset = offset
+	race_progress = float(lap) * curve_length + offset
+
+	var closest_local := curve.sample_baked(offset, true)
+	var ahead_local := curve.sample_baked(offset + 0.5, true)
+	var path_dir := ahead_local - closest_local
+	path_dir.y = 0.0
+	if path_dir.length_squared() < 0.0001:
+		return
+	var right := path_dir.normalized().cross(Vector3.UP)
+	var lateral := global_position - center_line.to_global(closest_local)
+	lateral.y = 0.0
+	on_left_side = lateral.dot(right) < 0.0
 
 
 func _reset_dynamic_state() -> void:

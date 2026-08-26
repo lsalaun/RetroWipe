@@ -5,9 +5,8 @@
 [ext_resource type="PackedScene" path="res://scenes/Track12.tscn" id="3_track"]
 [ext_resource type="Script" uid="uid://byrj7ar10c3tw" path="res://scripts/main.gd" id="4_script"]
 [ext_resource type="Script" uid="uid://cm2bv2lk458ib" path="res://scripts/ship_collision_manager.gd" id="5_ship_collision_manager"]
-[ext_resource type="Resource" path="res://resources/handling/arcade_profile.tres" id="6_handling_arcade"]
-[ext_resource type="Resource" path="res://resources/handling/stable_profile.tres" id="7_handling_stable"]
 [ext_resource type="PackedScene" path="res://scenes/PauseMenu.tscn" id="8_pause_menu"]
+[ext_resource type="Script" path="res://scripts/race_field.gd" id="9_race_field"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.0862745, 0.129412, 0.239216, 1)
@@ -30,12 +29,16 @@ glow_enabled = true
 [node name="Main" type="Node3D" unique_id=1322351224]
 script = ExtResource("4_script")
 default_track_scene = ExtResource("3_track")
+ai_ship_scene = ExtResource("2_ship_ai")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1258542334]
 environment = SubResource("Environment_1")
 
 [node name="ShipCollisionManager" type="Node" parent="." unique_id=1114843883]
 script = ExtResource("5_ship_collision_manager")
+
+[node name="RaceField" type="Node" parent="."]
+script = ExtResource("9_race_field")
 
 [node name="PauseMenu" parent="." instance=ExtResource("8_pause_menu")]
 
@@ -46,13 +49,3 @@ shadow_enabled = true
 
 [node name="Ship" parent="." unique_id=1149031679 instance=ExtResource("1_ship")]
 transform = Transform3D(-0.714723, 0, -0.699408, 0, 1, 0, 0.699408, 0, -0.714723, -233.3237, 3.139844, -48.37043)
-
-[node name="ShipAI1" parent="." unique_id=194525854 instance=ExtResource("2_ship_ai")]
-transform = Transform3D(-0.714723, 0, -0.699408, 0, 1, 0, 0.699408, 0, -0.714723, -235.468, 3.139844, -46.272)
-lane_offset = 3.0
-handling = ExtResource("6_handling_arcade")
-
-[node name="ShipAI2" parent="." unique_id=1557096319 instance=ExtResource("2_ship_ai")]
-transform = Transform3D(-0.714723, 0, -0.699408, 0, 1, 0, 0.699408, 0, -0.714723, -231.179, 3.139844, -50.469)
-lane_offset = -3.0
-handling = ExtResource("7_handling_stable")

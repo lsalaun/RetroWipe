@@ -80,6 +80,11 @@ class HoverSample:
 	$HoverRearLeft,
 	$HoverRearRight,
 ]
+# Lateral probes against the track trimesh (not hover rays). Order matches
+# ship.c: nose first, then left/right wings.
+@onready var wall_nose: RayCast3D = $WallNose
+@onready var wall_wing_left: RayCast3D = $WallWingLeft
+@onready var wall_wing_right: RayCast3D = $WallWingRight
 @onready var body_mesh: MeshInstance3D = $BodyMesh
 @onready var camera_rig: Node3D = $CameraRig
 @onready var hull_area: Area3D = $HullArea
@@ -361,35 +366,17 @@ func _handle_wall_collisions(up: Vector3, delta: float) -> void:
 	if wall_impact_cooldown > 0.0:
 		return
 
-	var forward := _planar_forward(up)
-	var right := _planar_right(up, forward)
-	var best_normal := Vector3.ZERO
-	var best_contact_offset := Vector3.ZERO
-	var best_lateral_offset := 0.0
-	var found_hit := false
-
-	for index in hover_points.size():
-		var ray := hover_points[index]
-		if not ray.is_colliding():
-			continue
-
-		var normal := ray.get_collision_normal()
-		if absf(normal.y) > 0.45:
-			continue
-
-		var ray_contact_offset := ray.get_collision_point() - global_position
-		var ray_lateral_offset := ray_contact_offset.dot(right)
-		if not found_hit or absf(ray_lateral_offset) > absf(best_lateral_offset):
-			best_normal = normal
-			best_contact_offset = ray_contact_offset
-			best_lateral_offset = ray_lateral_offset
-			found_hit = true
-
-	if not found_hit:
+	var hit := _sample_wall_probe()
+	if hit.is_empty():
 		return
 
+	var forward := _planar_forward(up)
+	var right := _planar_right(up, forward)
+	var best_normal: Vector3 = hit["normal"]
+	var best_contact_offset: Vector3 = hit["point"] - global_position
+	var is_nose: bool = hit["kind"] == &"nose"
+	var lateral_offset := best_contact_offset.dot(right)
 	var speed := velocity.length()
-	var lateral_offset := best_lateral_offset
 
 	# Stronger Wipeout-style impact response: quick bounce, heavy loss of forward
 	# momentum, and a deliberate push away from the wall to avoid sticking.
@@ -398,20 +385,44 @@ func _handle_wall_collisions(up: Vector3, delta: float) -> void:
 	velocity += best_normal * wall_push_speed
 	velocity -= forward * clampf(speed * 0.12, 0.0, 18.0)
 
-	if absf(lateral_offset) <= wall_nose_hit_width:
-		# Nose hit: strong yaw kick, like a sharp clipping against the wall. The ship
-		# snaps away from the side of the hit rather than just sliding along it.
+	if is_nose:
 		var yaw_magnitude := speed * wall_nose_yaw_k1 + wall_nose_yaw_k2
 		yaw_velocity -= signf(best_normal.dot(right)) * yaw_magnitude
 	else:
-		# Wing hit: bigger roll and stronger speed loss, closer to Wipeout's wall clips.
 		var impact_angle := best_contact_offset.angle_to(forward)
 		var roll_magnitude := impact_angle * speed * wall_wing_roll_k
-		roll_rate += signf(lateral_offset) * roll_magnitude
+		var wing_sign := -1.0 if hit["kind"] == &"wing_left" else 1.0
+		roll_rate += wing_sign * roll_magnitude
 		velocity *= wall_wing_extra_damping
-		velocity -= right * signf(lateral_offset) * minf(absf(lateral_offset) * 0.8, 8.0)
+		velocity -= right * wing_sign * minf(absf(lateral_offset) * 0.8, 8.0)
 
 	wall_impact_cooldown = wall_impact_cooldown_duration
+
+
+## Nose first, then wings — same priority as ship_collide_with_track().
+func _sample_wall_probe() -> Dictionary:
+	var nose := _wall_hit_if_vertical(wall_nose)
+	if not nose.is_empty():
+		nose["kind"] = &"nose"
+		return nose
+	var left := _wall_hit_if_vertical(wall_wing_left)
+	if not left.is_empty():
+		left["kind"] = &"wing_left"
+		return left
+	var right := _wall_hit_if_vertical(wall_wing_right)
+	if not right.is_empty():
+		right["kind"] = &"wing_right"
+		return right
+	return {}
+
+
+func _wall_hit_if_vertical(ray: RayCast3D) -> Dictionary:
+	if ray == null or not ray.is_colliding():
+		return {}
+	var normal := ray.get_collision_normal()
+	if absf(normal.y) > 0.45:
+		return {}
+	return {"normal": normal, "point": ray.get_collision_point()}
 
 
 func _update_orientation(hover: HoverSample, up: Vector3, pitch_input: float, grounded: bool, delta: float) -> void:

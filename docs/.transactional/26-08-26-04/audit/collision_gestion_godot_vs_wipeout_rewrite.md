@@ -1,193 +1,155 @@
-# Audit — gestion des collisions Godot vs wipeout-rewrite
+# Audit — collisions Godot, adaptées depuis wipeout-rewrite
 
 Date : 2026-08-26
 
-Périmètre : port Godot `D:\code\wipeout-rewrite\godot` comparé au moteur C `D:\code\wipeout-rewrite\src\wipeout`.
+Périmètre : architecture de collisions du port Godot (`godot/src`) en s’appuyant sur wipeout-rewrite (`src/wipeout`) comme **référence de comportement**, pas comme pipeline à cloner.
 
 ---
 
-## Verdict
+## Objectif
 
-Le port Godot **reprend l’intention** des collisions Wipeout (sol / mur nez-aile / vaisseau–vaisseau), mais **ce n’est pas le même moteur**.
+Adapter wipeout-rewrite vers une **architecture Godot**, pas recréer le moteur C.
 
-- L’original est un système **géométrique par faces de piste** (`TRACK.TRF`).
-- Godot est un système **RayCast + trimesh + Area3D**, avec des approximations importantes.
+Cela veut dire :
 
----
+- garder le **feel** Wipeout (hover collé à la piste, rebond sol, clip nez/aile, contact vaisseau–vaisseau, pads) ;
+- s’appuyer sur les nœuds Godot (`Node3D`, `RayCast3D`, `StaticBody3D` trimesh, `Area3D`) ;
+- **ne pas** porter `TRACK.TRF` / `ship_collide_with_track()` / `alcol.prm` tels quels.
 
-## 1. Piste (sol + murs)
-
-### wipeout-rewrite
-
-Sources : `src/wipeout/ship.c`, `src/wipeout/ship_player.c`, `src/wipeout/track.h`.
-
-- La piste est une liste de **faces** (`track_face_t`) : sol (`FACE_TRACK_BASE`) vs murs.
-- Le vaisseau connaît sa **section courante**.
-- `ship_collide_with_track()` teste **3 points** contre le **plan du mur** :
-  - nez `ship_nose` = `(0, 0, 512)`
-  - aile gauche `(-256, 0, -256)`
-  - aile droite `(256, 0, -256)`
-- Collision = **distance signée au plan ≤ 0**.
-- Aux jonctions (`SECTION_JUNCTION_*`), un test supplémentaire `vec3_is_on_face()` évite les faux positifs.
-- Le boost est **continu** tant que la face a `FACE_BOOST`.
-
-### Godot
-
-Sources : `godot/src/scripts/track_mesh_collider.gd`, `godot/src/scripts/wipeout_ship.gd`.
-
-- Le mesh de piste devient un `StaticBody3D` **trimesh** avec `backface_collision = true` (bon choix : pas de hull convexe gonflé).
-- Le vaisseau est un `Node3D` **sans** `CharacterBody3D` / `RigidBody3D` : le moteur physique Godot **ne pousse pas** le hull contre la piste.
-- Sol et murs passent par **4 RayCast3D vers le bas** (`HoverFront/Rear Left/Right`).
-- Un hit est **sol** si `|normal.y| ≥ 0.5`, **mur** si `|normal.y| ≤ 0.45`.
-
-### Écarts
-
-- Pas de faces TRF, pas de section courante, pas de logique de jonction.
-- Les murs ne sont pas testés avec nez/ailes dédiés, mais avec des rayons **verticaux** qui touchent parfois un mur.
-- `Track12.tscn` n’a **pas** de `GameplayZones` (pas de pads boost).
-- Le `CollisionShape3D` du vaisseau est un enfant de `Node3D` : **inerte**, il ne collisionne rien.
-
-Le trimesh + backface est aligné avec le gotcha déjà noté : un hull convexe déborde de la piste et crée de faux contacts muraux.
+Le C reste la spec de *quoi* doit arriver (rebond, yaw nez, roll aile, échange de masse). Godot décide *comment* (raycasts, areas, trimesh).
 
 ---
 
-## 2. Collision sol (hover / bounce)
+## Architecture Godot retenue
 
-### Original (`ship_player.c`)
-
-- Hauteur = distance au **plan de la face**.
-- `height <= 0` : `reflect(v, n, 2)` puis `* 0.875`, plus une poussée `-n * 64`.
-- `height < 30` : petite poussée vers le haut.
-- Aimant de piste : `TRACK_MAGNET * (FLOAT / height - 1)`.
-
-### Godot
-
-- Hauteur = moyenne des 4 rayons.
-- Bounce `0.875` si `height <= 0` : **fidèle en ratio**.
-- Aimant de piste porté en ratio, pas en unités PSX.
-- **Coyote time** 80 ms (ajout Godot, absent de l’original).
-- Les rayons trop horizontaux sont ignorés pour le sol (filtre anti-mur).
-
-C’est la partie **la plus proche** de l’original, au niveau comportement.
-
----
-
-## 3. Collision murs
-
-### Original
-
-`ship_resolve_nose_collision` / `ship_resolve_wing_collision` :
-
-1. `velocity = reflect(v, face.normal, 2)`
-2. Recul de position `v * 0.015625`
-3. Amortissement `v *= 0.5`
-4. Éjection `v += face.normal * 4096`
-5. **Nez** → yaw (`angular_velocity.y`)
-6. **Aile** → roll (`angular_velocity.z`)
-7. `last_impact_time` **ne bloque pas** la collision : il ne gate que le SFX (`> 0.2 s`)
-
-### Godot (`_handle_wall_collisions`)
-
-1. Bounce `* 0.35` (beaucoup plus mou que reflect 2 + 0.5)
-2. `+ normal * wall_push_speed` (18)
-3. Perte de vitesse avant
-4. Nez vs aile selon l’offset latéral (`wall_nose_hit_width = 0.58`)
-5. **Cooldown 0.12 s qui skippe toute la résolution**
-
-### Écarts majeurs
-
-- Classification nez/aile approximative (offset latéral du rayon, pas les 3 points du modèle).
-- Pas de recul de position.
-- Le cooldown **empêche** les collisions répétées ; l’original continue de résoudre chaque frame.
-- Pas de sons d’impact.
-
----
-
-## 4. Collision vaisseau–vaisseau
-
-### Original (`ship_collide_with_ship`)
-
-- Early-out distance `960`.
-- Intersection **réelle** via `collision_model` (`alcol.prm`, 4 points + primitives).
-- Échange de vitesse pondéré par masse, puis `* 0.5`.
-- Recul de position, puis poussée `separation * 4`.
-- Flag `SHIP_COLL` + SFX crunch.
-
-### Godot (`ship_collision_manager.gd`)
-
-- Early-out `6 m`.
-- Overlap de `HullArea` (boîte `3.4 × 1.5 × 7.9`, layer 64).
-- Même idée masse / `* 0.5`.
-- Poussée `separation * 2.5`.
-- **Pas** de recul de position, **pas** de mesh `alcol.prm`.
-
-La résolution vitesse est **conceptuellement portée**. La détection est une **AABB**, pas le mesh de collision PSX.
-
----
-
-## 5. Boost pads
-
-| | Original | Godot |
+| Rôle | Choix Godot | Pourquoi |
 |---|---|---|
-| Détection | face courante `FACE_BOOST` | `Area3D` one-shot |
-| Force | `track_direction * 30 * dt` **chaque frame** | `+forward * 24` **une fois** à l’entrée |
-| Direction | axe de la **section** | `-basis.z` du vaisseau |
+| Géométrie de piste | `StaticBody3D` + `ConcavePolygonShape3D` (`create_trimesh_shape`) + `backface_collision` | Collider fidèle au mesh importé ; un hull convexe gonfle hors piste et crée de faux murs |
+| Vaisseau | `Node3D` cinématique (intégration manuelle de `velocity`) | Même modèle que le C (`position += velocity * dt`) ; un `RigidBody3D` imposerait une physique générique |
+| Sol / hover | 4 `RayCast3D` vers le bas | Équivalent Godot de la hauteur au plan de face, sans parser TRF chaque frame |
+| Murs | 3 `RayCast3D` latéraux (`WallNose` / `WallWingLeft` / `WallWingRight`) vs trimesh, filtrés par `normal.y` | Les hover rays restent au sol ; les parois verticales sont sondées à l’horizontale (nez puis ailes) |
+| Vaisseau–vaisseau | `Area3D` `HullArea` + manager de paires | Overlap Godot à la place de `ship_intersects_ship` / `alcol.prm` |
+| Boost / pickups | `Area3D` spawnés depuis `*_face_flags.json` | Les flags TRF sont **pré-exportés**, pas évalués à runtime |
 
-Sur Track 01 / 02, les pads sont spawnés depuis `*_face_flags.json`. Track 12 n’en a pas.
-
----
-
-## Tableau de fidélité
-
-| Sous-système | Fidélité | Commentaire |
-|---|---|---|
-| Collider piste trimesh + backface | Bon | Évite les faux murs d’un hull convexe |
-| Hover / bounce sol | Bon | Ratios portés, pas les unités PSX |
-| Murs nez / aile | Moyen | Même idée, autre détection et autre réponse |
-| Vaisseau–vaisseau | Moyen | Même échange de masse, autre shape |
-| Boost | Faible | One-shot vs continu le long de la section |
-| Jonctions / faces TRF | Absent | Pas de `ship_collide_with_track` |
-| SFX collision | Absent | `last_impact_time` / crunch non portés |
-| Track 12 gameplay zones | Absent | Pas de pads |
+Le `CollisionShape3D` enfant du vaisseau n’est **pas** un corps physique : il ne sert pas à bloquer la piste. C’est voulu. Le vaisseau n’est pas un `CharacterBody3D`.
 
 ---
 
-## Risques concrets en jeu
+## Mapping comportement C → Godot
 
-1. **Murs ratés ou collants** : un RayCast vers le bas peut ne jamais voir un mur vertical, ou le voir trop tard.
-2. **Le cooldown Godot** peut laisser le vaisseau **traverser** un mur fin si le premier hit n’éjecte pas assez.
-3. **Le hull n’est pas un corps physique** : rien n’empêche une pénétration si les rayons / areas ratent.
-4. **Ship–ship** : les boîtes sont plus grosses / plus simples que `alcol.prm` → contacts plus précoces, moins “pointus”.
-5. **Track 12** : collisions mesh OK, mais **aucun pad**.
+### 1. Sol / hover
+
+**C** (`ship_player.c`) : distance au plan de la face courante ; bounce `reflect * 0.875` si `height <= 0` ; aimant `TRACK_MAGNET * (FLOAT / height - 1)`.
+
+**Godot** (`wipeout_ship.gd`) : moyenne des 4 rayons ; bounce `0.875` ; aimant porté **en ratio**, pas en unités PSX ; coyote time 80 ms (ajout Godot pour lisser les bords de mesh).
+
+Les rayons trop horizontaux (`|normal.y| < 0.5`) sont ignorés pour le sol : ce n’est pas dans le C, c’est un filtre Godot pour ne pas prendre un mur pour de la piste.
+
+**Statut** : adapté, feel proche. Pas un port 1:1 des constantes NTSC/fixed-point.
+
+### 2. Murs (nez / aile)
+
+**C** : 3 points (nez, aile G, aile D) vs plan de la face mur de la **section courante** ; reflect + recul + `v *= 0.5` + éjection le long de la normale ; yaw (nez) ou roll (aile). `last_impact_time` ne gate que le SFX.
+
+**Godot** : hit mural si `|normal.y| ≤ 0.45` sur un **probe latéral** (`WallNose` puis ailes) ; bounce `* 0.35` + `wall_push_speed` ; yaw nez / roll aile selon `kind` (`nose` / `wing_left` / `wing_right`) ; cooldown 0.12 s sur **toute** la résolution.
+
+C’est une **adaptation** : même split nez/aile, autre détection (rayons horizontaux vs trimesh, pas points vs plan TRF). Le cooldown Godot évite le jitter sur trimesh ; le C n’en a pas besoin parce qu’il résout contre une seule face par frame.
+
+**Statut** : probes latéraux en place (joueur + IA). Feel encore à retuner (cooldown trop agressif, voir écart 2).
+
+### 3. Vaisseau–vaisseau
+
+**C** : early-out distance ; intersection mesh `alcol.prm` ; échange masse `* 0.5` ; recul de position ; poussée `separation * 4`.
+
+**Godot** (`ship_collision_manager.gd`) : early-out 6 m ; overlap `HullArea` (AABB) ; même échange de masse ; poussée `separation * 2.5` ; pas de recul de position.
+
+**Statut** : adapté. L’AABB est le choix Godot (pas d’import `alcol.prm`). Si les contacts sont trop précoces, resserrer la boîte, pas réimplémenter les primitives PSX.
+
+### 4. Boost pads
+
+**C** : tant que la face courante a `FACE_BOOST`, `velocity += track_direction * 30 * dt` **chaque frame**.
+
+**Godot** : `Area3D` one-shot `+forward * 24` à l’entrée, positions depuis `*_face_flags.json`.
+
+**Statut** : adapté en trigger Godot. Track 01 / 02 OK. Track 12 : trimesh OK, **pas de `GameplayZones`** — trou d’adaptation, pas un argument pour relire TRF en runtime.
+
+Un pad continu (tant que overlap) resterait Godot-idiomatic et plus proche du C que de parser les faces.
+
+---
+
+## Ce qu’on ne porte pas (volontairement)
+
+| Élément C | Pourquoi Godot s’en passe |
+|---|---|
+| `track_face_t` / section courante à chaque frame | Remplacé par mesh + raycasts / areas |
+| `vec3_is_on_face` / `SECTION_JUNCTION_*` | Le trimesh porte déjà la géométrie des jonctions |
+| `alcol.prm` | `HullArea` |
+| Unités PSX (`4096`, `0.015625`, distance `960`) | Mètres Godot, constantes re-tunées |
+| `SHIP_COLL` / SFX liés à `last_impact_time` | Pas encore branché ; à faire via signaux Godot, pas flags C |
+
+---
+
+## Écarts à traiter (dans le cadre Godot)
+
+Ce sont des **trous d’adaptation**, pas des absences de code C.
+
+1. **Murs** : ~~rayons de hover trop pauvres~~ **fait** — probes `WallNose` / `WallWingLeft` / `WallWingRight` (`_sample_wall_probe`, nez d’abord). Hover rays inchangés (sol uniquement).
+2. **Cooldown mural** trop agressif → peut laisser traverser un mur fin ; le réduire ou n’appliquer le cooldown qu’au SFX / yaw, pas à l’éjection.
+3. **Hull inerte** : normal pour un `Node3D` cinématique ; si pénétration, corriger par probes, pas par `CharacterBody3D.move_and_slide` (ça changerait le feel).
+4. **Ship–ship** : AABB plus large que `alcol.prm` → retuner la boîte.
+5. **Track 12** : brancher `GameplayZones` + `track_*_face_flags.json` comme Track 01 / 02.
+6. **Boost** : option overlap continu plutôt que one-shot, toujours en `Area3D`.
+7. **SFX** : `area_entered` / impact mural → `AudioStreamPlayer3D`, pas un port de `sfx_play_at`.
+
+---
+
+## Tableau (adaptation, pas fidélité 1:1)
+
+| Sous-système | Adaptation Godot | Feel vs C | Suite |
+|---|---|---|---|
+| Collider piste trimesh + backface | Fait, bon choix | Solide | Garder ; ne pas passer en convex |
+| Hover / bounce sol | Fait | Proche | Fine-tune constantes |
+| Murs nez / aile | Fait (probes latéraux) | À retuner | Cooldown / SFX |
+| Vaisseau–vaisseau | Fait (Area3D) | Moyen | Retuner HullArea |
+| Boost | Fait (Area3D) | Plus faible (one-shot) | Overlap continu |
+| Jonctions TRF | Non porté, volontaire | N/A | Trimesh suffit |
+| SFX collision | Pas encore | Absent | Signaux Godot |
+| Track 12 pads | Manquant | Absent | Copier le pattern Track 01/02 |
 
 ---
 
 ## Recommandation
 
-En résumé : Godot **imite** Wipeout rewrite, il ne **reproduit pas** le pipeline faces/nez/ailes.
+Rester sur l’architecture actuelle (`Node3D` + trimesh + raycasts + areas).
 
-Pour se rapprocher vraiment :
+Ne pas réintroduire :
 
-- tester des points nez/ailes contre les faces mur du JSON (comme `ship_collide_with_track`) ;
-- ne plus se servir des rayons de hover pour les murs ;
-- éventuellement porter le recul de position et le SFX d’impact ;
-- ajouter les `GameplayZones` manquantes sur Track 12.
+- un parseur TRF runtime,
+- `ship_collide_with_track()` point-vs-plan,
+- un `RigidBody3D` pour “avoir des collisions Godot”.
+
+Priorités d’adaptation :
+
+1. Probes muraux latéraux (nez / ailes) contre le trimesh.
+2. `GameplayZones` sur Track 12.
+3. Boost tant que overlap.
+4. SFX d’impact via nœuds audio.
 
 ---
 
 ## Fichiers de référence
 
-### Original C
+### Spec comportement (C)
 
-- `src/wipeout/ship.c` — `ship_collide_with_track`, `ship_resolve_nose_collision`, `ship_resolve_wing_collision`, `ship_collide_with_ship`, `ship_intersects_ship`
-- `src/wipeout/ship_player.c` — hover, bounce sol, boost `FACE_BOOST`
-- `src/wipeout/track.h` — flags de faces / sections
+- `src/wipeout/ship.c` — murs, vaisseau–vaisseau
+- `src/wipeout/ship_player.c` — hover, bounce, boost
+- `src/wipeout/track.h` — flags (exportés vers JSON, pas lus en jeu)
 
-### Port Godot
+### Implémentation Godot
 
-- `godot/src/scripts/wipeout_ship.gd` — hover, bounce, `_handle_wall_collisions`
-- `godot/src/scripts/track_mesh_collider.gd` — trimesh + backface
-- `godot/src/scripts/ship_collision_manager.gd` — vaisseau–vaisseau
-- `godot/src/scripts/track_boost_pad.gd` / `track_gameplay_zones.gd` — pads
-- `godot/src/scenes/WipeoutShip.tscn` — RayCasts + HullArea
+- `godot/src/scripts/wipeout_ship.gd`
+- `godot/src/scripts/track_mesh_collider.gd`
+- `godot/src/scripts/ship_collision_manager.gd`
+- `godot/src/scripts/track_boost_pad.gd` / `track_gameplay_zones.gd`
+- `godot/src/scenes/WipeoutShip.tscn`
 - `godot/src/scenes/Track01.tscn`, `Track02.tscn`, `Track12.tscn`

@@ -66,6 +66,21 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.75, 0, 1.15)
 target_position = Vector3(0, -3, 0)
 enabled = true
 
+[node name="WallNose" type="RayCast3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.35)
+target_position = Vector3(0, 0, -3.4)
+enabled = true
+
+[node name="WallWingLeft" type="RayCast3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.75, 0, 0.4)
+target_position = Vector3(-2.2, 0, 0)
+enabled = true
+
+[node name="WallWingRight" type="RayCast3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.75, 0, 0.4)
+target_position = Vector3(2.2, 0, 0)
+enabled = true
+
 [node name="CameraRig" type="Node3D" parent="."]
 top_level = true
 

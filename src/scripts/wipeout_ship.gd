@@ -51,8 +51,8 @@ class HoverSample:
 @export var roll_yaw_gain: float = 0.95 # ported from angular_acceleration.z += (angular_velocity.y - 0.5 * angular_velocity.z)
 @export var roll_spring_damping: float = 3.4
 @export var align_speed: float = 14.0 # faster orientation snap to match the sharper turn rate
-@export var camera_distance: float = 11.0
-@export var camera_height: float = 3.8
+@export var camera_distance: float = 14.0 # bumped up from the placeholder-box tuning (11.0) to clear the real imported ship models (~8m long, see convert_ships.py)
+@export var camera_height: float = 4.6
 @export var camera_follow_speed: float = 6.0
 @export var wall_push_speed: float = 18.0 # stronger Wipeout wall ejection while staying controlled enough to avoid instability
 @export var wall_nose_hit_width: float = 0.58 # tighter nose threshold keeps wall-clips more pointy and Wipeout-like

@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/wipeout_ship_ai.gd" id="1_script"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
-size = Vector3(1.7, 0.9, 3.8)
+size = Vector3(3.4, 1.5, 7.9)
 
 [sub_resource type="BoxMesh" id="BoxMesh_1"]
 size = Vector3(1.8, 0.45, 3.6)

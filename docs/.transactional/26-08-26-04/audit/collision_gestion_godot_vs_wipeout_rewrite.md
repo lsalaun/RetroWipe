@@ -85,7 +85,7 @@ Ce pad continu (tant que overlap) reste Godot-idiomatic et plus proche du C que 
 | `vec3_is_on_face` / `SECTION_JUNCTION_*` | Le trimesh porte déjà la géométrie des jonctions |
 | `alcol.prm` | `HullArea` |
 | Unités PSX (`4096`, `0.015625`, distance `960`) | Mètres Godot, constantes re-tunées |
-| `SHIP_COLL` / SFX liés à `last_impact_time` | Pas encore branché ; à faire via signaux Godot, pas flags C |
+| `SHIP_COLL` / SFX liés à `last_impact_time` | Branché via `HullArea.area_entered` / `_handle_wall_collisions` + `AudioStreamPlayer3D`, pas un timer `last_impact_time` porté (voir écart 7, fait) |
 
 ---
 
@@ -99,7 +99,7 @@ Ce sont des **trous d’adaptation**, pas des absences de code C.
 4. ~~**Ship–ship** : AABB plus large que `alcol.prm`~~ **fait** — `HullArea` a maintenant sa propre `BoxShape3D` (2.0 x 1.0 x 5.4) séparée du placeholder plein gabarit (3.4 x 1.5 x 7.9, mesuré égal à l'AABB réelle du modèle importé), pour ne plus déclencher un contact sur les extrémités (nez/ailes) comme le ferait la boîte pleine taille.
 5. **Track 12** : brancher `GameplayZones` + `track_*_face_flags.json` comme Track 01 / 02.
 6. ~~**Boost** : option overlap continu plutôt que one-shot~~ **fait** — `TrackBoostPad._physics_process` applique maintenant `velocity += -forward * boost_accel * delta` à chaque frame de chevauchement (via `get_overlapping_areas()`), toujours en `Area3D`, au lieu d'une impulsion unique sur `area_entered`.
-7. **SFX** : `area_entered` / impact mural → `AudioStreamPlayer3D`, pas un port de `sfx_play_at`.
+7. ~~**SFX** : `area_entered` / impact mural → `AudioStreamPlayer3D`, pas un port de `sfx_play_at`~~ **fait** — `HullArea.area_entered` déclenche `ShipImpactSFX` (gaté par `ship_impact_cooldown_duration = 0.2`, même seuil que `last_impact_time > 0.2` dans le C) ; `_handle_wall_collisions` déclenche `WallImpactSFX` au point de contact, dans le même bloc gaté par `wall_impact_cooldown` que le yaw/roll (voir écart 2). Les deux passent par `_play_sfx()` et un `@export AudioStream` nul par défaut (no-op tant qu'aucun son n'est assigné) — pas de timer `last_impact_time` porté.
 
 ---
 
@@ -113,7 +113,7 @@ Ce sont des **trous d’adaptation**, pas des absences de code C.
 | Vaisseau–vaisseau | Fait (Area3D, boîte retunée 2.0x1.0x5.4) | Proche | Ajuster si besoin |
 | Boost | Fait (Area3D, overlap continu) | Proche | Retuner `boost_accel` au ressenti |
 | Jonctions TRF | Non porté, volontaire | N/A | Trimesh suffit |
-| SFX collision | Pas encore | Absent | Signaux Godot |
+| SFX collision | Fait (branché, streams non assignés) | N/A (silencieux tant qu'aucun `AudioStream` n'est fourni) | Assigner de vrais sons |
 | Track 12 pads | Manquant | Absent | Copier le pattern Track 01/02 |
 
 ---
@@ -131,7 +131,7 @@ Ne pas réintroduire :
 Priorités d’adaptation :
 
 1. `GameplayZones` sur Track 12.
-2. SFX d’impact via nœuds audio.
+2. Assigner de vrais `AudioStream` à `wall_impact_sound`/`ship_impact_sound` (streams laissés vides pour l'instant, aucun asset audio converti dans le dépôt Godot).
 
 ---
 

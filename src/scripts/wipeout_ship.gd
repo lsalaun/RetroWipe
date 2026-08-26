@@ -65,6 +65,9 @@ class HoverSample:
 @export var wall_wing_extra_damping: float = 0.72 # extra velocity damping applied only on wing impacts
 @export var wall_impact_cooldown_duration: float = 0.12 # shorter cooldown to keep impact cadence closer to Wipeout
 @export var hull_unstick_speed: float = 6.0 # last-resort probe-based push-out if the hull still ends up embedded in geometry (thin wall tunnelled through at high speed); not a physics body, just a nudge along the contact normal
+@export var wall_impact_sound: AudioStream # played through WallImpactSFX on a fresh (non-cooldown) wall hit
+@export var ship_impact_sound: AudioStream # played through ShipImpactSFX on HullArea.area_entered
+@export var ship_impact_cooldown_duration: float = 0.2 # ported from ship.c: last_impact_time > 0.2 gate before playing SFX_CRUNCH
 @export var mass: float = 1.0 # ported from ship.c ship_collide_with_ship: mass-weighted velocity exchange between ships
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
@@ -87,6 +90,8 @@ class HoverSample:
 @onready var wall_wing_left: RayCast3D = $WallWingLeft
 @onready var wall_wing_right: RayCast3D = $WallWingRight
 @onready var hull_penetration_probe: ShapeCast3D = $HullPenetrationProbe
+@onready var wall_impact_sfx: AudioStreamPlayer3D = $WallImpactSFX
+@onready var ship_impact_sfx: AudioStreamPlayer3D = $ShipImpactSFX
 @onready var body_mesh: MeshInstance3D = $BodyMesh
 @onready var camera_rig: Node3D = $CameraRig
 @onready var hull_area: Area3D = $HullArea
@@ -104,6 +109,7 @@ var visual_roll: float = 0.0
 var roll_rate: float = 0.0
 var visual_pitch: float = 0.0
 var wall_impact_cooldown: float = 0.0
+var ship_impact_cooldown: float = 0.0
 var desired_forward: Vector3 = Vector3.FORWARD
 var last_ground_normal: Vector3 = Vector3.UP
 var last_ground_height: float = 0.0
@@ -124,6 +130,30 @@ func _ready() -> void:
 	_snap_camera_to_ship()
 	if ship_model_scene != null:
 		set_ship_model(ship_model_scene)
+	if hull_area != null:
+		hull_area.area_entered.connect(_on_hull_area_entered)
+
+
+## Godot-idiomatic stand-in for ship.c's `last_impact_time`-gated `sfx_play_at()`:
+## triggered straight off HullArea's own `area_entered` signal instead of a
+## polled per-frame timer, and played through a plain AudioStreamPlayer3D.
+func _on_hull_area_entered(area: Area3D) -> void:
+	if ship_impact_cooldown > 0.0:
+		return
+	if not (area.get_parent() is WipeoutShip):
+		return
+	ship_impact_cooldown = ship_impact_cooldown_duration
+	_play_sfx(ship_impact_sfx, ship_impact_sound, global_position)
+
+
+## Same idea for wall impacts: no `last_impact_time` port, just a plain
+## AudioStreamPlayer3D triggered at the contact point.
+func _play_sfx(player: AudioStreamPlayer3D, stream: AudioStream, at_position: Vector3) -> void:
+	if player == null or stream == null:
+		return
+	player.global_position = at_position
+	player.stream = stream
+	player.play()
 
 
 ## Swaps the visible hull for an imported ship model, hiding the placeholder
@@ -196,6 +226,7 @@ func _physics_process(delta: float) -> void:
 	_apply_hover_forces(hover, up, grounded, delta)
 	_apply_drive_forces(up, steer, pitch_input, grounded, delta)
 
+	ship_impact_cooldown = maxf(ship_impact_cooldown - delta, 0.0)
 	global_position += velocity * delta
 	_handle_wall_collisions(up, delta)
 	_resolve_hull_penetration(delta)
@@ -395,6 +426,8 @@ func _handle_wall_collisions(up: Vector3, delta: float) -> void:
 
 	if wall_impact_cooldown > 0.0:
 		return
+
+	_play_sfx(wall_impact_sfx, wall_impact_sound, hit["point"])
 
 	if is_nose:
 		var yaw_magnitude := speed * wall_nose_yaw_k1 + wall_nose_yaw_k2
@@ -624,6 +657,7 @@ func _reset_dynamic_state() -> void:
 	roll_rate = 0.0
 	visual_roll = 0.0
 	wall_impact_cooldown = 0.0
+	ship_impact_cooldown = 0.0
 	airborne_time = 0.0
 
 

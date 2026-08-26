@@ -53,7 +53,10 @@ class HoverSample:
 @export var align_speed: float = 14.0 # faster orientation snap to match the sharper turn rate
 @export var camera_distance: float = 14.0 # bumped up from the placeholder-box tuning (11.0) to clear the real imported ship models (~8m long, see convert_ships.py)
 @export var camera_height: float = 4.6
-@export var camera_follow_speed: float = 6.0
+@export var camera_follow_speed: float = 6.0 # fallback lerp speed, used only when no center_line curve is assigned
+@export var camera_spring_accel: float = 0.46875 # ported from camera.c camera_update_race_external: 0.015625 * 30
+@export var camera_spring_damping: float = 3.75 # ported from camera.c camera_update_race_external: 0.125 * 30
+@export var camera_track_probe: float = 10.0 # look-ahead distance (meters) along center_line, analogous to section->next in camera.c's track ray
 @export var wall_push_speed: float = 18.0 # stronger Wipeout wall ejection while staying controlled enough to avoid instability
 @export var wall_nose_hit_width: float = 0.58 # tighter nose threshold keeps wall-clips more pointy and Wipeout-like
 @export var wall_nose_yaw_k1: float = 0.12 # stronger nose impact yaw magnitude = speed * k1 + k2
@@ -100,6 +103,7 @@ var last_ground_height: float = 0.0
 var grounded_grace_timer: float = 0.0
 var spawn_transform: Transform3D
 var velocity: Vector3 = Vector3.ZERO
+var camera_velocity: Vector3 = Vector3.ZERO # spring state, ported from camera_t.velocity
 
 
 func _ready() -> void:
@@ -139,9 +143,10 @@ func set_ship_model(model_scene: PackedScene) -> void:
 ## CameraRig has top_level = true so it doesn't inherit the ship's transform;
 ## without this it starts at the world origin and visibly lerps in over ~1s.
 func _snap_camera_to_ship() -> void:
+	camera_velocity = Vector3.ZERO
 	var forward := -global_transform.basis.z
-	camera_rig.global_position = global_position - forward * camera_distance + global_transform.basis.y * camera_height
-	camera_rig.look_at(global_position + forward * 10.0 + global_transform.basis.y * 1.2, Vector3.UP)
+	camera_rig.global_position = global_position - forward * camera_distance + Vector3.UP * camera_height
+	camera_rig.global_transform.basis = _camera_orientation_basis(forward)
 
 
 ## Repositions the ship (used when main.gd picks a track at runtime, after
@@ -189,7 +194,7 @@ func _physics_process(delta: float) -> void:
 	_update_orientation(hover, up, pitch_input, grounded, delta)
 	_update_visuals(steer, pitch_input, grounded, delta)
 	if is_player_controlled:
-		_update_camera(up, delta)
+		_update_camera(delta)
 
 	if airborne_time > rescue_delay:
 		_rescue_to_track()
@@ -454,11 +459,57 @@ func _update_visuals(steer: float, pitch_input: float, grounded: bool, delta: fl
 	body_mesh.rotation = Vector3(visual_pitch, 0.0, visual_roll)
 
 
-func _update_camera(up: Vector3, delta: float) -> void:
-	var forward := _planar_forward(Vector3.UP)
-	var target_position := global_position - forward * camera_distance + up * camera_height
-	camera_rig.global_position = camera_rig.global_position.lerp(target_position, minf(1.0, camera_follow_speed * delta))
-	camera_rig.look_at(global_position + forward * 10.0 + up * 1.2, Vector3.UP)
+## Ported from camera.c's camera_update_race_external(): the camera's raw chase
+## point (behind + above the ship, banking with roll) is pulled by a spring/damper
+## toward the nearest point on the track's straight-line direction ray, giving the
+## same loose, elastic correction feel as the original instead of a plain lerp.
+func _camera_chase_position(delta: float) -> Vector3:
+	var forward := -global_transform.basis.z
+	var rolled_basis := global_transform.basis.rotated(forward, visual_roll)
+	var raw_pos := global_position + rolled_basis * Vector3(0, 0, camera_distance) + Vector3.UP * camera_height
+
+	if center_line == null or center_line.curve == null or center_line.curve.point_count < 2:
+		if camera_follow_speed > 0.0:
+			return camera_rig.global_position.lerp(raw_pos, minf(1.0, camera_follow_speed * delta))
+		camera_velocity = Vector3.ZERO
+		return raw_pos
+
+	var curve := center_line.curve
+	var offset := curve.get_closest_offset(center_line.to_local(raw_pos))
+	var ahead_offset := minf(offset + camera_track_probe, curve.get_baked_length())
+	var p_current := center_line.to_global(curve.sample_baked(offset, true))
+	var p_ahead := center_line.to_global(curve.sample_baked(ahead_offset, true))
+
+	# ported from vec3_project_to_ray(pos, next->center, camera->section->center)
+	var target := p_current
+	var ray := p_ahead - p_current
+	if ray.length_squared() > 0.0001:
+		ray = ray.normalized()
+		target = p_current + ray * (raw_pos - p_current).dot(ray)
+
+	var diff_from_center := raw_pos - target
+	var accel := diff_from_center
+	accel.y += diff_from_center.length() * 0.5
+	camera_velocity -= accel * (camera_spring_accel * delta)
+	camera_velocity -= camera_velocity * minf(1.0, camera_spring_damping * delta)
+	return raw_pos + camera_velocity
+
+
+## Ported from camera.c: camera->angle = vec3(ship->angle.x, ship->angle.y, 0) --
+## builds an orientation directly from the ship's pitch/yaw forward vector (no roll),
+## independent of the spring-lagged position so rotation tracks the ship instantly.
+func _camera_orientation_basis(forward: Vector3) -> Basis:
+	var right := forward.cross(Vector3.UP)
+	if right.length_squared() < 0.0001:
+		right = global_transform.basis.x
+	right = right.normalized()
+	var cam_up := right.cross(forward).normalized()
+	return Basis(right, cam_up, -forward).orthonormalized()
+
+
+func _update_camera(delta: float) -> void:
+	camera_rig.global_position = _camera_chase_position(delta)
+	camera_rig.global_transform.basis = _camera_orientation_basis(-global_transform.basis.z)
 
 
 func _planar_forward(up: Vector3) -> Vector3:
@@ -517,6 +568,7 @@ func _rescue_to_track() -> void:
 
 func _reset_dynamic_state() -> void:
 	velocity = Vector3.ZERO
+	camera_velocity = Vector3.ZERO
 	thrust_mag = 0.0
 	reverse_brake = 0.0
 	brake_left = 0.0

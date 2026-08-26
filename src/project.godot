@@ -23,6 +23,8 @@ config/icon="res://icon.svg"
 
 TrackSelection="*res://scripts/track_selection.gd"
 ShipSelection="*res://scripts/ship_selection.gd"
+RaceSetup="*res://scripts/race_setup.gd"
+Settings="*res://scripts/settings.gd"
 
 [display]
 

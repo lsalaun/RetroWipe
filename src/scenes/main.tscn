@@ -7,6 +7,7 @@
 [ext_resource type="Script" uid="uid://cm2bv2lk458ib" path="res://scripts/ship_collision_manager.gd" id="5_ship_collision_manager"]
 [ext_resource type="Resource" path="res://resources/handling/arcade_profile.tres" id="6_handling_arcade"]
 [ext_resource type="Resource" path="res://resources/handling/stable_profile.tres" id="7_handling_stable"]
+[ext_resource type="PackedScene" path="res://scenes/PauseMenu.tscn" id="8_pause_menu"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.0862745, 0.129412, 0.239216, 1)
@@ -35,6 +36,8 @@ environment = SubResource("Environment_1")
 
 [node name="ShipCollisionManager" type="Node" parent="." unique_id=1114843883]
 script = ExtResource("5_ship_collision_manager")
+
+[node name="PauseMenu" parent="." instance=ExtResource("8_pause_menu")]
 
 [node name="Sun" type="DirectionalLight3D" parent="." unique_id=2043747583]
 transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 18, 0)

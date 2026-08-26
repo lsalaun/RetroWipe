@@ -1,11 +1,13 @@
 extends Node
 
-## Autoload: holds the track picked from the main menu so `main.tscn` knows
-## which track scene to instantiate on launch.
+## Autoload: holds the track picked from CircuitMenu so `main.tscn` knows
+## which track scene to instantiate on launch. Names match the circuits
+## src/wipeout/game.c's def.circuits associates with these PSX tracks
+## (TRACK01 -> TERRAMAX, TRACK12 -> KORODERA, venom class paths).
 
 const TRACKS: Array[Dictionary] = [
-	{"name": "Track 12", "scene": "res://scenes/Track12.tscn"},
-	{"name": "Track 01", "scene": "res://scenes/Track01.tscn"},
+	{"name": "TERRAMAX", "scene": "res://scenes/Track01.tscn"},
+	{"name": "KORODERA", "scene": "res://scenes/Track12.tscn"},
 ]
 
 var selected_track_scene: PackedScene = null

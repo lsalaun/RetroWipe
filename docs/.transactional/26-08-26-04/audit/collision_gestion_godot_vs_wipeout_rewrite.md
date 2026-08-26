@@ -31,7 +31,7 @@ Le C reste la spec de *quoi* doit arriver (rebond, yaw nez, roll aile, échange 
 | Vaisseau–vaisseau | `Area3D` `HullArea` + manager de paires | Overlap Godot à la place de `ship_intersects_ship` / `alcol.prm` |
 | Boost / pickups | `Area3D` spawnés depuis `*_face_flags.json` | Les flags TRF sont **pré-exportés**, pas évalués à runtime |
 
-Le `CollisionShape3D` enfant du vaisseau n’est **pas** un corps physique : il ne sert pas à bloquer la piste. C’est voulu. Le vaisseau n’est pas un `CharacterBody3D`.
+Le `CollisionShape3D` enfant du vaisseau n’est **pas** un corps physique : il ne sert pas à bloquer la piste. C’est voulu. Le vaisseau n’est pas un `CharacterBody3D`. En dernier recours, un `ShapeCast3D` (`HullPenetrationProbe`, même forme que ce `CollisionShape3D`) détecte un chevauchement déjà en cours avec le trimesh et repousse la position hors du mur — toujours pas de corps physique, juste une correction ponctuelle (voir écart 3).
 
 ---
 
@@ -95,7 +95,7 @@ Ce sont des **trous d’adaptation**, pas des absences de code C.
 
 1. **Murs** : ~~rayons de hover trop pauvres~~ **fait** — probes `WallNose` / `WallWingLeft` / `WallWingRight` (`_sample_wall_probe`, nez d’abord). Hover rays inchangés (sol uniquement).
 2. ~~**Cooldown mural** trop agressif → peut laisser traverser un mur fin~~ **fait** — `_handle_wall_collisions` résout maintenant le bounce/push/damping à chaque frame de contact ; seule l’impulsion de rotation (yaw nez / roll aile) reste gatée par `wall_impact_cooldown_duration` (0.12 s).
-3. **Hull inerte** : normal pour un `Node3D` cinématique ; si pénétration, corriger par probes, pas par `CharacterBody3D.move_and_slide` (ça changerait le feel).
+3. **Hull inerte** : normal pour un `Node3D` cinématique ; ~~si pénétration, corriger par probes, pas par `CharacterBody3D.move_and_slide`~~ **fait** — `HullPenetrationProbe` (`ShapeCast3D`, même `BoxShape3D` que le hull) détecte un chevauchement déjà en cours avec le trimesh et repousse la position le long de la normale de contact (`_resolve_hull_penetration`), sans introduire de corps physique.
 4. **Ship–ship** : AABB plus large que `alcol.prm` → retuner la boîte.
 5. **Track 12** : brancher `GameplayZones` + `track_*_face_flags.json` comme Track 01 / 02.
 6. **Boost** : option overlap continu plutôt que one-shot, toujours en `Area3D`.
@@ -109,7 +109,7 @@ Ce sont des **trous d’adaptation**, pas des absences de code C.
 |---|---|---|---|
 | Collider piste trimesh + backface | Fait, bon choix | Solide | Garder ; ne pas passer en convex |
 | Hover / bounce sol | Fait | Proche | Fine-tune constantes |
-| Murs nez / aile | Fait (probes latéraux + éjection non gatée par le cooldown) | Proche | SFX |
+| Murs nez / aile | Fait (probes latéraux + éjection non gatée par le cooldown + `HullPenetrationProbe` en dernier recours) | Proche | SFX |
 | Vaisseau–vaisseau | Fait (Area3D) | Moyen | Retuner HullArea |
 | Boost | Fait (Area3D) | Plus faible (one-shot) | Overlap continu |
 | Jonctions TRF | Non porté, volontaire | N/A | Trimesh suffit |

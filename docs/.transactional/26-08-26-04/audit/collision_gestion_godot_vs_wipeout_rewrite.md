@@ -69,11 +69,11 @@ C’est une **adaptation** : même split nez/aile, autre détection (rayons hori
 
 **C** : tant que la face courante a `FACE_BOOST`, `velocity += track_direction * 30 * dt` **chaque frame**.
 
-**Godot** : `Area3D` one-shot `+forward * 24` à l’entrée, positions depuis `*_face_flags.json`.
+**Godot** : `Area3D` overlap continu — `velocity += -forward * boost_accel * delta` à chaque frame de chevauchement, positions depuis `*_face_flags.json`.
 
-**Statut** : adapté en trigger Godot. Track 01 / 02 OK. Track 12 : trimesh OK, **pas de `GameplayZones`** — trou d’adaptation, pas un argument pour relire TRF en runtime.
+**Statut** : adapté en trigger Godot continu (voir écart 6, fait). Track 01 / 02 OK. Track 12 : trimesh OK, **pas de `GameplayZones`** — trou d’adaptation, pas un argument pour relire TRF en runtime.
 
-Un pad continu (tant que overlap) resterait Godot-idiomatic et plus proche du C que de parser les faces.
+Ce pad continu (tant que overlap) reste Godot-idiomatic et plus proche du C que de parser les faces.
 
 ---
 
@@ -98,7 +98,7 @@ Ce sont des **trous d’adaptation**, pas des absences de code C.
 3. **Hull inerte** : normal pour un `Node3D` cinématique ; ~~si pénétration, corriger par probes, pas par `CharacterBody3D.move_and_slide`~~ **fait** — `HullPenetrationProbe` (`ShapeCast3D`, même `BoxShape3D` que le hull) détecte un chevauchement déjà en cours avec le trimesh et repousse la position le long de la normale de contact (`_resolve_hull_penetration`), sans introduire de corps physique.
 4. ~~**Ship–ship** : AABB plus large que `alcol.prm`~~ **fait** — `HullArea` a maintenant sa propre `BoxShape3D` (2.0 x 1.0 x 5.4) séparée du placeholder plein gabarit (3.4 x 1.5 x 7.9, mesuré égal à l'AABB réelle du modèle importé), pour ne plus déclencher un contact sur les extrémités (nez/ailes) comme le ferait la boîte pleine taille.
 5. **Track 12** : brancher `GameplayZones` + `track_*_face_flags.json` comme Track 01 / 02.
-6. **Boost** : option overlap continu plutôt que one-shot, toujours en `Area3D`.
+6. ~~**Boost** : option overlap continu plutôt que one-shot~~ **fait** — `TrackBoostPad._physics_process` applique maintenant `velocity += -forward * boost_accel * delta` à chaque frame de chevauchement (via `get_overlapping_areas()`), toujours en `Area3D`, au lieu d'une impulsion unique sur `area_entered`.
 7. **SFX** : `area_entered` / impact mural → `AudioStreamPlayer3D`, pas un port de `sfx_play_at`.
 
 ---
@@ -111,7 +111,7 @@ Ce sont des **trous d’adaptation**, pas des absences de code C.
 | Hover / bounce sol | Fait | Proche | Fine-tune constantes |
 | Murs nez / aile | Fait (probes latéraux + éjection non gatée par le cooldown + `HullPenetrationProbe` en dernier recours) | Proche | SFX |
 | Vaisseau–vaisseau | Fait (Area3D, boîte retunée 2.0x1.0x5.4) | Proche | Ajuster si besoin |
-| Boost | Fait (Area3D) | Plus faible (one-shot) | Overlap continu |
+| Boost | Fait (Area3D, overlap continu) | Proche | Retuner `boost_accel` au ressenti |
 | Jonctions TRF | Non porté, volontaire | N/A | Trimesh suffit |
 | SFX collision | Pas encore | Absent | Signaux Godot |
 | Track 12 pads | Manquant | Absent | Copier le pattern Track 01/02 |
@@ -131,8 +131,7 @@ Ne pas réintroduire :
 Priorités d’adaptation :
 
 1. `GameplayZones` sur Track 12.
-2. Boost tant que overlap.
-3. SFX d’impact via nœuds audio.
+2. SFX d’impact via nœuds audio.
 
 ---
 

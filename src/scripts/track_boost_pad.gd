@@ -2,15 +2,14 @@ extends Area3D
 class_name TrackBoostPad
 
 ## Ported from ship_player.c's ship_player_update_race() boost handling:
-## `if (face->flags & FACE_BOOST) velocity += track_direction * 30 * dt`. Here
-## adapted to a discrete trigger area instead of a per-frame track-face check:
-## on entering, the ship's velocity gets a one-shot additive push along its
-## own current forward axis (instead of the original's continuous per-frame
-## nudge along the raw track-section direction, which doesn't map 1:1 to
-## Godot's meter/variable-delta ship model -- see wipeout_ship.gd's tuning
-## note on hand-tuned constants vs. literal PSX unit conversion).
+## `if (face->flags & FACE_BOOST) velocity += track_direction * 30 * dt`. Continuous
+## overlap push along the ship's own forward axis, applied every physics frame the
+## ship is over the pad (not a one-shot impulse on entry), matching the original's
+## per-frame accumulation while on a boost face -- adapted to Godot's meter/
+## variable-delta ship model instead of the raw PSX track-section direction (see
+## wipeout_ship.gd's tuning note on hand-tuned constants vs. literal PSX conversion).
 
-@export var boost_speed: float = 24.0 # additive velocity along the ship's forward axis, m/s
+@export var boost_accel: float = 160.0 # additive velocity along the ship's forward axis, m/s^2
 @export var box_size: Vector3 = Vector3(6.0, 4.0, 6.0)
 
 
@@ -27,11 +26,11 @@ func _ready() -> void:
 	shape.shape = box
 	add_child(shape)
 
-	area_entered.connect(_on_area_entered)
 
+func _physics_process(delta: float) -> void:
+	for area in get_overlapping_areas():
+		var ship := area.get_parent() as WipeoutShip
+		if ship == null:
+			continue
+		ship.velocity += -ship.global_transform.basis.z * boost_accel * delta
 
-func _on_area_entered(area: Area3D) -> void:
-	var ship := area.get_parent() as WipeoutShip
-	if ship == null:
-		return
-	ship.velocity += -ship.global_transform.basis.z * boost_speed

@@ -64,6 +64,7 @@ class HoverSample:
 @export var wall_wing_roll_k: float = 0.18 # stronger wing roll kick on outward wall impact
 @export var wall_wing_extra_damping: float = 0.72 # extra velocity damping applied only on wing impacts
 @export var wall_impact_cooldown_duration: float = 0.12 # shorter cooldown to keep impact cadence closer to Wipeout
+@export var hull_unstick_speed: float = 6.0 # last-resort probe-based push-out if the hull still ends up embedded in geometry (thin wall tunnelled through at high speed); not a physics body, just a nudge along the contact normal
 @export var mass: float = 1.0 # ported from ship.c ship_collide_with_ship: mass-weighted velocity exchange between ships
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
@@ -85,6 +86,7 @@ class HoverSample:
 @onready var wall_nose: RayCast3D = $WallNose
 @onready var wall_wing_left: RayCast3D = $WallWingLeft
 @onready var wall_wing_right: RayCast3D = $WallWingRight
+@onready var hull_penetration_probe: ShapeCast3D = $HullPenetrationProbe
 @onready var body_mesh: MeshInstance3D = $BodyMesh
 @onready var camera_rig: Node3D = $CameraRig
 @onready var hull_area: Area3D = $HullArea
@@ -196,6 +198,7 @@ func _physics_process(delta: float) -> void:
 
 	global_position += velocity * delta
 	_handle_wall_collisions(up, delta)
+	_resolve_hull_penetration(delta)
 	_update_orientation(hover, up, pitch_input, grounded, delta)
 	_update_visuals(steer, pitch_input, grounded, delta)
 	if is_player_controlled:
@@ -403,6 +406,32 @@ func _handle_wall_collisions(up: Vector3, delta: float) -> void:
 
 	wall_impact_cooldown = wall_impact_cooldown_duration
 
+
+## Écart 3 (audit collisions) safety net: the hull's CollisionShape3D is
+## intentionally inert (no PhysicsBody3D, so the wipeout feel doesn't get
+## reshaped by a generic move_and_slide). If the wall probes above still let
+## the hull tunnel into geometry in one frame (thin wall, high speed), nudge
+## it back out along the overlapping contact normal instead of switching to
+## CharacterBody3D.
+func _resolve_hull_penetration(delta: float) -> void:
+	if hull_penetration_probe == null:
+		return
+
+	hull_penetration_probe.force_shapecast_update()
+	if not hull_penetration_probe.is_colliding():
+		return
+
+	var push := Vector3.ZERO
+	for i in hull_penetration_probe.get_collision_count():
+		push += hull_penetration_probe.get_collision_normal(i)
+	if push.is_zero_approx():
+		return
+	push = push.normalized()
+
+	global_position += push * hull_unstick_speed * delta
+	var inward := velocity.dot(push)
+	if inward < 0.0:
+		velocity -= push * inward
 
 
 ## Nose first, then wings — same priority as ship_collide_with_track().

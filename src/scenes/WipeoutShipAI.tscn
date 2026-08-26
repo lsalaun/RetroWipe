@@ -81,6 +81,11 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.75, 0, 0.4)
 target_position = Vector3(2.2, 0, 0)
 enabled = true
 
+[node name="HullPenetrationProbe" type="ShapeCast3D" parent="."]
+shape = SubResource("BoxShape3D_1")
+target_position = Vector3(0, 0, 0)
+enabled = true
+
 [node name="CameraRig" type="Node3D" parent="."]
 top_level = true
 

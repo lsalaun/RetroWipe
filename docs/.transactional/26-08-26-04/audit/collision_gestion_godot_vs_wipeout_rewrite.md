@@ -61,9 +61,9 @@ C’est une **adaptation** : même split nez/aile, autre détection (rayons hori
 
 **C** : early-out distance ; intersection mesh `alcol.prm` ; échange masse `* 0.5` ; recul de position ; poussée `separation * 4`.
 
-**Godot** (`ship_collision_manager.gd`) : early-out 6 m ; overlap `HullArea` (AABB) ; même échange de masse ; poussée `separation * 2.5` ; pas de recul de position.
+**Godot** (`ship_collision_manager.gd`) : early-out 6 m ; overlap `HullArea` (AABB retunée à 2.0 x 1.0 x 5.4, distincte du placeholder plein gabarit) ; même échange de masse ; poussée `separation * 2.5` ; pas de recul de position.
 
-**Statut** : adapté. L’AABB est le choix Godot (pas d’import `alcol.prm`). Si les contacts sont trop précoces, resserrer la boîte, pas réimplémenter les primitives PSX.
+**Statut** : adapté. La boîte `HullArea` est désormais plus proche du gabarit `alcol.prm` (coarse 4-vertex proxy dans le C) que du mesh visuel complet (voir écart 4, fait). Si les contacts restent trop précoces/tardifs, retuner encore cette boîte, pas réimplémenter les primitives PSX.
 
 ### 4. Boost pads
 
@@ -96,7 +96,7 @@ Ce sont des **trous d’adaptation**, pas des absences de code C.
 1. **Murs** : ~~rayons de hover trop pauvres~~ **fait** — probes `WallNose` / `WallWingLeft` / `WallWingRight` (`_sample_wall_probe`, nez d’abord). Hover rays inchangés (sol uniquement).
 2. ~~**Cooldown mural** trop agressif → peut laisser traverser un mur fin~~ **fait** — `_handle_wall_collisions` résout maintenant le bounce/push/damping à chaque frame de contact ; seule l’impulsion de rotation (yaw nez / roll aile) reste gatée par `wall_impact_cooldown_duration` (0.12 s).
 3. **Hull inerte** : normal pour un `Node3D` cinématique ; ~~si pénétration, corriger par probes, pas par `CharacterBody3D.move_and_slide`~~ **fait** — `HullPenetrationProbe` (`ShapeCast3D`, même `BoxShape3D` que le hull) détecte un chevauchement déjà en cours avec le trimesh et repousse la position le long de la normale de contact (`_resolve_hull_penetration`), sans introduire de corps physique.
-4. **Ship–ship** : AABB plus large que `alcol.prm` → retuner la boîte.
+4. ~~**Ship–ship** : AABB plus large que `alcol.prm`~~ **fait** — `HullArea` a maintenant sa propre `BoxShape3D` (2.0 x 1.0 x 5.4) séparée du placeholder plein gabarit (3.4 x 1.5 x 7.9, mesuré égal à l'AABB réelle du modèle importé), pour ne plus déclencher un contact sur les extrémités (nez/ailes) comme le ferait la boîte pleine taille.
 5. **Track 12** : brancher `GameplayZones` + `track_*_face_flags.json` comme Track 01 / 02.
 6. **Boost** : option overlap continu plutôt que one-shot, toujours en `Area3D`.
 7. **SFX** : `area_entered` / impact mural → `AudioStreamPlayer3D`, pas un port de `sfx_play_at`.
@@ -110,7 +110,7 @@ Ce sont des **trous d’adaptation**, pas des absences de code C.
 | Collider piste trimesh + backface | Fait, bon choix | Solide | Garder ; ne pas passer en convex |
 | Hover / bounce sol | Fait | Proche | Fine-tune constantes |
 | Murs nez / aile | Fait (probes latéraux + éjection non gatée par le cooldown + `HullPenetrationProbe` en dernier recours) | Proche | SFX |
-| Vaisseau–vaisseau | Fait (Area3D) | Moyen | Retuner HullArea |
+| Vaisseau–vaisseau | Fait (Area3D, boîte retunée 2.0x1.0x5.4) | Proche | Ajuster si besoin |
 | Boost | Fait (Area3D) | Plus faible (one-shot) | Overlap continu |
 | Jonctions TRF | Non porté, volontaire | N/A | Trimesh suffit |
 | SFX collision | Pas encore | Absent | Signaux Godot |

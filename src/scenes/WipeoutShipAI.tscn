@@ -5,6 +5,12 @@
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(3.4, 1.5, 7.9)
 
+[sub_resource type="BoxShape3D" id="BoxShape3D_hull_area"]
+# Tighter than BoxShape3D_1 (full render AABB): alcol.prm in the original is a
+# coarse 4-vertex collision proxy, much narrower/shorter than the visible
+# hull's wingtips/nose, so ship-ship contact shouldn't trigger on the full box.
+size = Vector3(2.0, 1.0, 5.4)
+
 [sub_resource type="BoxMesh" id="BoxMesh_1"]
 size = Vector3(1.8, 0.45, 3.6)
 
@@ -33,7 +39,7 @@ collision_layer = 64
 collision_mask = 64
 
 [node name="HullCollisionShape3D" type="CollisionShape3D" parent="HullArea"]
-shape = SubResource("BoxShape3D_1")
+shape = SubResource("BoxShape3D_hull_area")
 
 [node name="BodyMesh" type="MeshInstance3D" parent="."]
 mesh = SubResource("BoxMesh_1")

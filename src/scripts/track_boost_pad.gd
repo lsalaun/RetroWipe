@@ -20,6 +20,19 @@ func _ready() -> void:
 	monitorable = false
 	monitoring = true
 
+	var visual := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = box_size
+	visual.mesh = mesh
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.2, 0.95, 0.35, 0.7)
+	material.emission_enabled = true
+	material.emission = Color(0.15, 1.0, 0.2, 1.0)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	visual.material_override = material
+	add_child(visual)
+
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = box_size

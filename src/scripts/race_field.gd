@@ -77,7 +77,7 @@ static func track_display_name() -> String:
 	var path := TrackSelection.selected_track_scene.resource_path
 	for track in TrackSelection.TRACKS:
 		if track["scene"] == path:
-			return str(track["name"])
+			return str(track.get("circuit", track["name"]))
 	return "KORODERA"
 
 

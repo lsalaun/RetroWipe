@@ -33,13 +33,15 @@ Never convex-decompose edge shelves / side walls: inflated hulls false-trigger w
 
 ## ShipSpawn — TRS curves (`convert_track_sections.py`)
 
-Yaw-only (no pitch/roll) from the **first two** JSON points:
+Do **not** use JSON point 0. `convert_track_sections.py --start 0` walks `section.next` from TRS section 0; that is the topology loop, not the starting grid. Original `ships_init()` walks `start_line_pos - 15` sections first (`game.c` `def.circuits[].settings[].start_line_pos`; Terramax / Altima VII venom = 27 → index **12**). TRACK01 section 0 sits on the post-jump drop (void); index 12 is the flat.
 
-1. `forward = normalize((p1.x - p0.x, 0, p1.z - p0.z))` — ignore Δy for orientation.
+Yaw-only (no pitch/roll) from curve points `p = points[i]`, `q = points[i+1]` with `i = start_line_pos - 15`:
+
+1. `forward = normalize((q.x - p.x, 0, q.z - p.z))` — ignore Δy for orientation.
 2. `basis.z = -forward`, `basis.y = (0, 1, 0)`, `basis.x = UP.cross(basis.z)`.
-3. Origin XZ = p0.xz exactly; **Y = p0.y + 2.0** (hover clearance). Valid only because TRS conversion bakes real section altitude.
+3. Origin XZ = p.xz exactly; **Y = p.y + 2.0** (hover clearance). Valid only because TRS conversion bakes real section altitude.
 
-Always reproduce Track01's published `Transform3D` from **Track01's** JSON before trusting a new track.
+Always reproduce Track01's published `Transform3D` from **Track01's** JSON at that index before trusting a new track.
 
 Blender-curve tracks: do not use +2.0; raycast against mesh (see pipeline-blender-curve.md).
 

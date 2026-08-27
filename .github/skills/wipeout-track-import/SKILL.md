@@ -91,7 +91,7 @@ Work dir: `_converted_tracks/track_NN/`. Run every step: [pipeline-psx.md](./ref
 7. Copy into `godot/src/assets/tracks/Track_NN/` (glb ×3 + curve json + face_flags json). Overwrite in place.
 8. Run `godot --headless --path godot/src --import`; read UIDs from `.import` with `read_file`.
 9. Write/update `godot/src/scenes/TrackNN.tscn` from Track01/Track02. [scene-wiring.md](./references/scene-wiring.md).
-10. Compute `ShipSpawn` with a probe (do not hand-round): yaw-only from first two curve points; origin XZ = p0.xz; **Y = p0.y + 2.0** only for TRS curves. Reproduce Track01's published transform from *its* JSON before trusting a new track.
+10. Compute `ShipSpawn` with a probe (do not hand-round): yaw-only from curve points at index `start_line_pos - 15` (`game.c`, not JSON point 0); origin XZ = p.xz; **Y = p.y + 2.0** only for TRS curves. Reproduce Track01's published transform from *its* JSON at that index before trusting a new track.
 11. Run validators serially. [validation.md](./references/validation.md).
 
 ## Procedure — Pipeline B (Blender racing line)

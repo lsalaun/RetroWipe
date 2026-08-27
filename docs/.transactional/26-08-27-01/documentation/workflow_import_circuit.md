@@ -271,13 +271,15 @@ TrackNN (Node3D + TrackMeshCollider)
 
 ### 6.1 Calcul de `ShipSpawn` (pistes issues de `convert_track_sections.py`)
 
-Transform **yaw-only** (pas de pitch/roll) à partir des **deux premiers points** de la courbe JSON :
+Ne **pas** utiliser le point 0 du JSON. `convert_track_sections.py --start 0` suit `section.next` depuis la section TRS 0 (boucle topologique), pas la grille. Dans le C, `ships_init()` avance d'abord de `start_line_pos - 15` sections (`game.c` `def.circuits[].settings[].start_line_pos` ; Terramax / Altima VII venom = 27 → index **12**). Sur TRACK01 le point 0 est la descente après le saut (vide) ; l'index 12 est le plat.
 
-1. `forward = normalize((p1.x - p0.x, 0, p1.z - p0.z))` — le Δy entre p0 et p1 est ignoré pour l'orientation.
+Transform **yaw-only** (pas de pitch/roll) à partir de `p = points[i]`, `q = points[i+1]` avec `i = start_line_pos - 15` :
+
+1. `forward = normalize((q.x - p.x, 0, q.z - p.z))` — le Δy entre p et q est ignoré pour l'orientation.
 2. `basis.z = -forward`, `basis.y = (0, 1, 0)`, `basis.x = UP.cross(basis.z)`.
-3. Origine : XZ = p0.xz exactement ; **Y = p0.y + 2.0** (clairance hover fixe). Ce +2.0 ne vaut que parce que `convert_track_sections.py` bake déjà l'altitude réelle des sections.
+3. Origine : XZ = p.xz exactement ; **Y = p.y + 2.0** (clairance hover fixe). Ce +2.0 ne vaut que parce que `convert_track_sections.py` bake déjà l'altitude réelle des sections.
 
-Toujours reproduire le `Transform3D` publié de Track01 à partir de **son** JSON avant de faire confiance à une nouvelle piste.
+Toujours reproduire le `Transform3D` publié de Track01 à partir de **son** JSON à cet index avant de faire confiance à une nouvelle piste.
 
 ### 6.2 Piège `Transform3D` dans un `.tscn`
 
@@ -362,7 +364,7 @@ d:\Godot_4\Godot_v4.6.1-stable_win64_console.exe --headless --path D:\code\wipeo
 4. Copier GLB + JSON dans `godot/src/assets/tracks/Track_NN/` (même nom de fichier si remplacement).
 5. `godot --headless --path godot/src --import` puis lire les UID dans les `.import`.
 6. Créer / mettre à jour `scenes/TrackNN.tscn` (arbre §6).
-7. Calculer `ShipSpawn` (formule yaw-only + 2 m si courbe TRS ; raycast si courbe Blender).
+7. Calculer `ShipSpawn` (yaw-only à l'index `start_line_pos - 15`, pas le point 0 du JSON, + 2 m si courbe TRS ; raycast si courbe Blender).
 8. Vérifier le littéral `Transform3D` (row-major, ≥12 décimales, `basis.y = (0,1,0)`).
 9. `inspect_scene.gd` sur les GLB ; `inspect_ai_track_alignment.gd` une fois le circuit branché dans `main.tscn`.
 10. Adapter / relancer `validate_track_side_walls.gd` si la voie a des edge shelves.

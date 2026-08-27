@@ -71,7 +71,7 @@ d:\Godot_4\Godot_v4.6.1-stable_win64_console.exe --headless --path D:\code\wipeo
 4. Copy GLB + JSON into `godot/src/assets/tracks/Track_NN/` (same names on replace).
 5. `--import` then read UIDs from `.import`.
 6. Create/update `scenes/TrackNN.tscn` (`Track03.tscn`, not `Track_03.tscn`).
-7. Compute ShipSpawn (yaw-only + 2 m if TRS curve; raycast if Blender curve).
+7. Compute ShipSpawn (yaw-only at `start_line_pos - 15`, not JSON point 0, + 2 m if TRS curve; raycast if Blender curve).
 8. Verify Transform3D (row-major, ≥12 decimals, `basis.y = (0,1,0)`).
 9. `inspect_scene.gd` on GLBs; `inspect_ai_track_alignment.gd` once wired in `main.tscn`.
 10. Adapt / rerun `validate_track_side_walls.gd` if the lane has edge shelves.

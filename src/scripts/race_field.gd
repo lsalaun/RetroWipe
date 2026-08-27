@@ -11,14 +11,14 @@ const NUM_AI_OPPONENTS := 7
 ## Staggered 2-column grid in ShipSpawn local space (right, up, behind).
 ## Index 0 is pole (front); the player is always last, matching ships_init().
 const GRID_OFFSETS: Array[Vector3] = [
-	Vector3(-3.0, 0.0, 0.0),
-	Vector3(3.0, 0.0, 2.0),
-	Vector3(-3.0, 0.0, 4.0),
-	Vector3(3.0, 0.0, 6.0),
-	Vector3(-3.0, 0.0, 8.0),
-	Vector3(3.0, 0.0, 10.0),
-	Vector3(-3.0, 0.0, 12.0),
-	Vector3(3.0, 0.0, 14.0),
+	Vector3(-1.8, 0.0, 0.0),
+	Vector3(1.8, 0.0, 2.0),
+	Vector3(-1.8, 0.0, 4.0),
+	Vector3(1.8, 0.0, 6.0),
+	Vector3(-1.8, 0.0, 8.0),
+	Vector3(1.8, 0.0, 10.0),
+	Vector3(-1.8, 0.0, 12.0),
+	Vector3(1.8, 0.0, 14.0),
 ]
 
 ## Per-class opponent tables from game.c def.ai_settings. Index 0 is the

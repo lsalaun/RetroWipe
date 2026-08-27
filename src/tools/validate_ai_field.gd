@@ -1,9 +1,11 @@
 extends SceneTree
 
 ## Headless check that the race field spawns 7 DPA opponents plus the player
-## and that they start following the center line.
+## and that they start following the center line without wall ping-pong.
 
-const WAIT_FRAMES := 48
+const WAIT_FRAMES := 180
+const MAX_AI_LATERAL := 7.5
+const MAX_AI_WALL_HITS := 8
 
 var _frames := 0
 var _main: Node3D = null
@@ -66,13 +68,25 @@ func _check_spawn() -> bool:
 func _check_motion() -> bool:
 	var moving := 0
 	var ranks: Dictionary = {}
+	var wall_fail := false
+	var lateral_fail := false
 	for node in get_nodes_in_group(&"ships"):
 		var ship := node as WipeoutShip
 		if ship == null:
 			continue
-		print(ship.name, " rank=", ship.position_rank, " progress=", snappedf(ship.race_progress, 0.01), " speed=", snappedf(ship.velocity.length(), 0.01), " left=", ship.on_left_side)
+		var lateral := _lateral_error(ship)
+		var strat := ""
+		if ship is WipeoutShipAI:
+			strat = str((ship as WipeoutShipAI).strategy)
+		print(ship.name, " rank=", ship.position_rank, " progress=", snappedf(ship.race_progress, 0.01), " speed=", snappedf(ship.velocity.length(), 0.01), " left=", ship.on_left_side, " lateral=", snappedf(lateral, 0.01), " walls=", ship.wall_hit_count, " strat=", strat)
 		if ship is WipeoutShipAI and ship.velocity.length() > 2.0:
 			moving += 1
+		if ship is WipeoutShipAI and ship.wall_hit_count > MAX_AI_WALL_HITS:
+			push_error("%s wall ping-pong: hits=%d" % [ship.name, ship.wall_hit_count])
+			wall_fail = true
+		if ship is WipeoutShipAI and lateral > MAX_AI_LATERAL:
+			push_error("%s drifted off racing line: lateral=%s" % [ship.name, str(snappedf(lateral, 0.01))])
+			lateral_fail = true
 		ranks[ship.position_rank] = true
 	print("moving_ai=", moving, " unique_ranks=", ranks.size())
 	if moving < 5:
@@ -81,4 +95,16 @@ func _check_motion() -> bool:
 	if ranks.size() != 8:
 		push_error("expected unique ranks 1-8")
 		return false
+	if wall_fail or lateral_fail:
+		return false
 	return true
+
+
+func _lateral_error(ship: WipeoutShip) -> float:
+	if ship.center_line == null or ship.center_line.curve == null or ship.center_line.curve.point_count < 2:
+		return 0.0
+	var curve := ship.center_line.curve
+	var closest := ship.center_line.to_global(curve.sample_baked(curve.get_closest_offset(ship.center_line.to_local(ship.global_position)), true))
+	var lateral := ship.global_position - closest
+	lateral.y = 0.0
+	return lateral.length()

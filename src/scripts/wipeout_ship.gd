@@ -123,6 +123,7 @@ var lap: int = 0
 var on_left_side: bool = false
 var just_in_front: bool = false
 var position_rank: int = 8
+var wall_hit_count: int = 0
 var _last_curve_offset: float = -1.0
 var _track_right_dir: Vector3 = Vector3.RIGHT # planar right of the nearest center-line tangent; used to tell floor faces from edge shelves
 
@@ -439,6 +440,7 @@ func _handle_wall_collisions(up: Vector3, delta: float) -> void:
 	if wall_impact_cooldown > 0.0:
 		return
 
+	wall_hit_count += 1
 	_play_sfx(wall_impact_sfx, wall_impact_sound, hit["point"])
 
 	if is_nose:

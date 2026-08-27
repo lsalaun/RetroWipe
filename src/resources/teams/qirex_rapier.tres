@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="TeamAttributes" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/team_attributes.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+team_name = "QIREX"
+race_class = 1
+mass = 150.0
+thrust_max = 1400.0
+resistance = 130.0
+turn_rate = 140.0
+turn_rate_max = 1920.0
+skid = 16.0

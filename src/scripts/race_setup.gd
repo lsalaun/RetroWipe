@@ -26,6 +26,26 @@ const TEAM_PILOTS: Dictionary = {
 	"FEISAR": ["Sofia De La Rente", "Paul Jackson"],
 }
 
+## Per-team PSX attributes from def.teams, indexed [Venom, Rapier].
+const TEAM_ATTRIBUTE_PATHS: Dictionary = {
+	"AG SYSTEMS": [
+		"res://resources/teams/ag_systems_venom.tres",
+		"res://resources/teams/ag_systems_rapier.tres",
+	],
+	"AURICOM": [
+		"res://resources/teams/auricom_venom.tres",
+		"res://resources/teams/auricom_rapier.tres",
+	],
+	"QIREX": [
+		"res://resources/teams/qirex_venom.tres",
+		"res://resources/teams/qirex_rapier.tres",
+	],
+	"FEISAR": [
+		"res://resources/teams/feisar_venom.tres",
+		"res://resources/teams/feisar_rapier.tres",
+	],
+}
+
 var race_class: int = RACE_CLASS_VENOM
 var race_type: int = RACE_TYPE_CHAMPIONSHIP
 var team_name: String = ""
@@ -58,3 +78,41 @@ func pilots_for_team(team: String) -> Array[Dictionary]:
 func select_pilot(ship: Dictionary) -> void:
 	pilot_name = ship["pilot"]
 	ShipSelection.select_ship(ship["mesh"])
+
+
+func normalize_team_name(team: String) -> String:
+	return team.strip_edges().to_upper()
+
+
+func team_for_pilot(pilot: String) -> String:
+	for team in TEAM_PILOTS:
+		for name in TEAM_PILOTS[team]:
+			if name == pilot:
+				return team
+	for ship in ShipSelection.SHIPS:
+		if str(ship.get("pilot", "")) == pilot:
+			var from_ship := normalize_team_name(str(ship.get("team", "")))
+			if TEAM_ATTRIBUTE_PATHS.has(from_ship):
+				return from_ship
+	if TEAM_ATTRIBUTE_PATHS.has(normalize_team_name(team_name)):
+		return normalize_team_name(team_name)
+	return TEAM_ORDER[0]
+
+
+func attributes_path_for(team: String, race_class_value: int = -1) -> String:
+	if race_class_value < 0:
+		race_class_value = race_class
+	var key := normalize_team_name(team)
+	if not TEAM_ATTRIBUTE_PATHS.has(key):
+		key = TEAM_ORDER[0]
+	var paths: Array = TEAM_ATTRIBUTE_PATHS[key]
+	var index := clampi(race_class_value, 0, paths.size() - 1)
+	return str(paths[index])
+
+
+func attributes_for(team: String, race_class_value: int = -1) -> Resource:
+	return load(attributes_path_for(team, race_class_value))
+
+
+func attributes_for_pilot(pilot: String, race_class_value: int = -1) -> Resource:
+	return attributes_for(team_for_pilot(pilot), race_class_value)

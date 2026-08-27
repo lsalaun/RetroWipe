@@ -130,8 +130,7 @@ var _track_right_dir: Vector3 = Vector3.RIGHT # planar right of the nearest cent
 
 func _ready() -> void:
 	add_to_group(&"ships")
-	if handling != null and handling.has_method("apply_to"):
-		handling.call("apply_to", self)
+	_apply_handling_profile()
 	spawn_transform = global_transform
 	desired_forward = -global_transform.basis.z
 	last_ground_normal = Vector3.UP
@@ -163,6 +162,19 @@ func _play_sfx(player: AudioStreamPlayer3D, stream: AudioStream, at_position: Ve
 	player.global_position = at_position
 	player.stream = stream
 	player.play()
+
+
+func _apply_handling_profile() -> void:
+	if handling != null and handling.has_method("apply_to"):
+		handling.call("apply_to", self)
+
+
+## Overlay team stats from def.teams after the shared ShipHandlingProfile.
+## Re-applies the handling resource first so calling this twice does not stack.
+func apply_team_attributes(attributes: Resource) -> void:
+	_apply_handling_profile()
+	if attributes != null and attributes.has_method("apply_to"):
+		attributes.call("apply_to", self)
 
 
 ## Swaps the visible hull for an imported ship model, hiding the placeholder

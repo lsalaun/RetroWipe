@@ -74,7 +74,7 @@ class HoverSample:
 @export var rescue_delay: float = 2.5
 @export var rescue_height: float = 4.0
 @export var rescue_look_back: float = 8.0 # distance behind the closest track point to re-drop the ship at, approximating the original's "last valid section"
-@export var void_fall_margin: float = 25.0 # how far below the last grounded height counts as a fall into the void, not an absolute world Y
+@export var void_fall_margin: float = 25.0 # how far below the racing line (or last grounded height if no curve) counts as a fall into the void — not an absolute world Y, and not the last crest Y
 @export var center_line: Path3D # track center line used to rescue the ship back onto the track
 @export var is_player_controlled: bool = true
 @export var handling: Resource
@@ -128,6 +128,7 @@ var wall_hit_count: int = 0
 var _last_curve_offset: float = -1.0
 var _track_right_dir: Vector3 = Vector3.RIGHT # across-lane axis from the nearest center-line tangent and racing-surface normal
 var _track_floor_normal: Vector3 = Vector3.UP # racing-surface normal under the center line; steep floors stay aligned with this, edge shelves do not
+var _track_center_point: Vector3 = Vector3.ZERO # nearest racing-line sample; void checks drop against this Y, not the last crest
 
 
 func _ready() -> void:
@@ -224,8 +225,11 @@ func respawn_at(new_transform: Transform3D) -> void:
 func _physics_process(delta: float) -> void:
 	_refresh_track_axes()
 	_update_race_progress()
-	if _wants_reset() or global_position.y < last_ground_height - void_fall_margin:
+	if _wants_reset():
 		_reset_to_spawn()
+		return
+	if _is_in_void():
+		_rescue_to_track()
 		return
 
 	var inputs := _gather_inputs()
@@ -568,6 +572,7 @@ func _refresh_track_axes() -> void:
 	var curve := center_line.curve
 	var offset := curve.get_closest_offset(center_line.to_local(global_position))
 	var closest_local := curve.sample_baked(offset, true)
+	_track_center_point = center_line.to_global(closest_local)
 	var path_dir := curve.sample_baked(offset + 0.5, true) - closest_local
 	if path_dir.length_squared() < 0.0001:
 		return
@@ -711,6 +716,16 @@ func _planar_right(up: Vector3, forward: Vector3) -> Vector3:
 	if right.length_squared() < 0.0001:
 		right = Vector3.RIGHT
 	return right.normalized()
+
+
+## Void is "well below the racing surface here", not "below the last crest".
+## Track03 drops ~578 m in one run; freezing last_ground_height at the peak
+## would fire a spawn reset after 25 m even while still on the slope.
+func _is_in_void() -> bool:
+	var reference_y := last_ground_height
+	if center_line != null and center_line.curve != null and center_line.curve.point_count >= 2:
+		reference_y = _track_center_point.y
+	return global_position.y < reference_y - void_fall_margin
 
 
 func _reset_to_spawn() -> void:

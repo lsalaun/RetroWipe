@@ -24,7 +24,8 @@ class HoverSample:
 @export var bounce_restitution: float = 0.875 # ported from ship_player.c hard-bounce velocity reflection attenuation
 @export var bounce_margin: float = 0.5 # height below which a soft floor push kicks in, ahead of the hard bounce at height <= 0
 @export var hover_min_normal_y: float = 0.5 # hover rays with a more horizontal normal are treated as a wall hit, not ground, and ignored
-@export var wall_lateral_min: float = 0.45 # |normal · track_right| above this is a side wall. Wipeout edge shelves are ~40° ramps (lateral ~0.70), not vertical walls; floors stay near 0 even when banked.
+@export var wall_lateral_min: float = 0.45 # |normal · track_right| above this is a side wall. Wipeout edge shelves are ~40° ramps (lateral ~0.70), not vertical walls.
+@export var wall_floor_align_min: float = 0.82 # |normal · center-line floor| above this is still the racing surface, even on a steep bank/pitch.
 @export var grounded_coyote_time: float = 0.08 # grace period keeping `grounded` true across a single-frame drop to 1 hover hit, to avoid sol/air flicker at track edges/bumps
 @export var nose_pitch_gain: float = 1.6 # ported from ship_player.c:370-377: pitch torque driven by nose/hull height difference
 @export var nose_pitch_max: float = 2.25
@@ -125,7 +126,8 @@ var just_in_front: bool = false
 var position_rank: int = 8
 var wall_hit_count: int = 0
 var _last_curve_offset: float = -1.0
-var _track_right_dir: Vector3 = Vector3.RIGHT # planar right of the nearest center-line tangent; used to tell floor faces from edge shelves
+var _track_right_dir: Vector3 = Vector3.RIGHT # across-lane axis from the nearest center-line tangent and racing-surface normal
+var _track_floor_normal: Vector3 = Vector3.UP # racing-surface normal under the center line; steep floors stay aligned with this, edge shelves do not
 
 
 func _ready() -> void:
@@ -310,7 +312,8 @@ func _sample_hover(delta: float) -> HoverSample:
 		var collision_normal := ray.get_collision_normal()
 		if _is_side_wall_normal(collision_normal):
 			continue # edge shelf / side wall: hover must not treat this as a ramp to climb
-		if absf(collision_normal.y) < hover_min_normal_y:
+		var matches_racing_surface := absf(collision_normal.dot(_track_floor_normal)) >= wall_floor_align_min
+		if not matches_racing_surface and absf(collision_normal.y) < hover_min_normal_y:
 			continue # too vertical to be ground/ceiling: this ray clipped a wall, not the track
 
 		hit_count += 1
@@ -532,12 +535,17 @@ func _wall_hit_if_side(ray: RayCast3D) -> Dictionary:
 
 
 ## Wipeout track sides are FACE_TRACK_BASE neighbours, not "vertical enough"
-## triangles. Relative to the center line, floor normals have almost no
-## lateral component even on banks; edge shelves point sideways (~0.70).
+## triangles. A steep/banked racing surface still matches the center-line
+## floor normal; edge shelves point across the lane instead (~0.70 lateral).
 func _is_side_wall_normal(normal: Vector3) -> bool:
+	if normal.length_squared() < 0.0001:
+		return false
+	var n := normal.normalized()
+	if absf(n.dot(_track_floor_normal)) >= wall_floor_align_min:
+		return false
 	if _track_right_dir.length_squared() < 0.0001:
-		return absf(normal.y) <= 0.45
-	return absf(normal.dot(_track_right_dir)) >= wall_lateral_min
+		return absf(n.y) <= 0.45
+	return absf(n.dot(_track_right_dir)) >= wall_lateral_min
 
 
 ## Bounce/eject along the lane, not up the shelf, so a 40° edge does not
@@ -559,14 +567,36 @@ func _refresh_track_axes() -> void:
 		return
 	var curve := center_line.curve
 	var offset := curve.get_closest_offset(center_line.to_local(global_position))
-	var path_dir := curve.sample_baked(offset + 0.5, true) - curve.sample_baked(offset, true)
-	path_dir.y = 0.0
+	var closest_local := curve.sample_baked(offset, true)
+	var path_dir := curve.sample_baked(offset + 0.5, true) - closest_local
 	if path_dir.length_squared() < 0.0001:
 		return
-	var right := path_dir.normalized().cross(Vector3.UP)
+	path_dir = path_dir.normalized()
+	var floor_n := _sample_centerline_floor_normal(center_line.to_global(closest_local))
+	if floor_n.length_squared() >= 0.0001:
+		_track_floor_normal = floor_n.normalized()
+	var right := path_dir.cross(_track_floor_normal)
+	if right.length_squared() < 0.0001:
+		right = path_dir.cross(Vector3.UP)
 	if right.length_squared() < 0.0001:
 		return
 	_track_right_dir = right.normalized()
+
+
+func _sample_centerline_floor_normal(world_point: Vector3) -> Vector3:
+	if not is_inside_tree():
+		return Vector3.ZERO
+	var space := get_world_3d().direct_space_state
+	if space == null:
+		return Vector3.ZERO
+	var from := world_point + Vector3.UP * 3.0
+	var query := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 16.0)
+	query.collide_with_areas = false
+	var hit := space.intersect_ray(query)
+	if hit.is_empty():
+		return Vector3.ZERO
+	var n: Vector3 = hit["normal"]
+	return n
 
 
 func _update_orientation(hover: HoverSample, up: Vector3, pitch_input: float, grounded: bool, delta: float) -> void:

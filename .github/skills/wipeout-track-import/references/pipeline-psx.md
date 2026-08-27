@@ -1,6 +1,6 @@
 # Pipeline A — full PSX TRACKNN import
 
-Run converters from `godot/tools/psx_track/` unless noted. Pass **identical** `--flip-z` / `--units-per-meter` on every step. Track01 / Track02: no `--flip-z`.
+Run converters from `godot/tools/psx_track/` unless noted. Pass **identical** `--flip-z` / `--units-per-meter` on every step. Track01 / Track02 / Track03: **`--flip-z` on every converter** (default Y-only negate mirrors L/R and billboard text vs wipeout-rewrite).
 
 Scratch: `_converted_tracks/track_NN/`. Deliverables: `godot/src/assets/tracks/Track_NN/`. Scene: `godot/src/scenes/TrackNN.tscn` (no underscore — `Track03.tscn`, not `Track_03.tscn`).
 
@@ -27,19 +27,21 @@ py convert_track_geometry.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\TRACK.TRF `
   D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_mesh.gltf `
   --library-cmp D:\code\wipeout-rewrite\wipeout\TRACKNN\LIBRARY.CMP `
-  --library-ttf D:\code\wipeout-rewrite\wipeout\TRACKNN\LIBRARY.TTF
+  --library-ttf D:\code\wipeout-rewrite\wipeout\TRACKNN\LIBRARY.TTF `
+  --flip-z
 ```
 
 Produces glTF + `.bin` + `Track_NN_mesh_textures/tex_*.png`. Without `--library-*`, looks next to the `.TRV` (case-insensitive). `--no-textures` skips PNG.
 
-Log checks: in-range face indices, unit normals, coherent texture count. Upside-down or mirrored → rerun with `--flip-z` **and** apply it to every other converter.
+Log checks: in-range face indices, unit normals, coherent texture count. Track01 / Track02 / Track03 use `--flip-z` on every converter (default Y-only negate is a mirror vs wipeout-rewrite).
 
 ## 2. AI center line
 
 ```powershell
 py convert_track_sections.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\TRACK.TRS `
-  D:\code\wipeout-rewrite\_converted_tracks\track_NN\track_NN_curve.json
+  D:\code\wipeout-rewrite\_converted_tracks\track_NN\track_NN_curve.json `
+  --flip-z
 ```
 
 Walks `section.next` from `--start` (default 0) until loop. Junction branches ignored (single racing line for `track_center_line.gd`).
@@ -63,7 +65,8 @@ If `closed=false`, try another `--start` or inspect junctions.
 py convert_track_face_flags.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\TRACK.TRV `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\TRACK.TRF `
-  D:\code\wipeout-rewrite\_converted_tracks\track_NN\track_NN_face_flags.json
+  D:\code\wipeout-rewrite\_converted_tracks\track_NN\track_NN_face_flags.json `
+  --flip-z
 ```
 
 Exports only:
@@ -79,12 +82,14 @@ Each entry: `face_index`, `center` (quad average, same space as mesh). TRACK01 h
 ```powershell
 py convert_track_scenery.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\SCENE.PRM `
-  D:\code\wipeout-rewrite\wipeout\TRACKNN\SCENE.CMP `
-  D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_scene.gltf
+  D:\code\wipeout-rewrite\wipeout\TRACKNN\SCENE.CMP ` `
+  --flip-z
 
 py convert_track_scenery.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\SKY.PRM `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\SKY.CMP `
+  D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_sky.gltf `
+  --flip-z
   D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_sky.gltf
 ```
 

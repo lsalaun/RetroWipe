@@ -60,7 +60,7 @@ Need a Godot circuit from PSX TRACKNN?
 └─ Scene already has GLB+JSON? → Skip convert; wire + validate. See ./references/scene-wiring.md and ./references/validation.md
 ```
 
-**Same flags on every converter for one track.** `--flip-z` and `--units-per-meter` must match geometry, sections, face flags, and scenery. Track01 / Track02 do **not** use `--flip-z`. Default scale is `DEFAULT_UNITS_PER_METER = 106.5` in `godot/tools/psx_track/psx_track_common.py`.
+**Same flags on every converter for one track.** `--flip-z` and `--units-per-meter` must match geometry, sections, face flags, and scenery. Track01 / Track02 / Track03 **all use `--flip-z`**: default `(x,-y,z)` is a reflection (L/R + ads mirrored vs wipeout-rewrite). Default scale is `DEFAULT_UNITS_PER_METER = 106.5` in `godot/tools/psx_track/psx_track_common.py`.
 
 Identify the circuit first: `wipeout/TRACKNN/TRACK.INF` (`outName = trakNN`) plus `src/wipeout/game.c` `def.circuits` (`.path = "wipeout/trackNN/"`). Examples: TRACK01 = Terramax (Venom), TRACK02 = Altima VII (Venom).
 

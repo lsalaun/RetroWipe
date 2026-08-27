@@ -28,7 +28,7 @@ magic(4)+type(4, `& 0xF`: `0x2` 16bpp, `0x8` 4bpp paletted, `0x9` 8bpp paletted)
 
 ## Axes and scale
 
-Source engine +Y is down. Converters negate Y (Godot/glTF +Y up) and reverse winding. `--flip-z` also negates Z (left/right mirror); enable only if the first export is visually mirrored. Track01 / Track02 do **not** need it.
+Source engine +Y is down. Converters negate Y (Godot/glTF +Y up) and reverse winding. Default `(x,-y,z)` is a **reflection** (odd axis count). `--flip-z` is `(x,-y,-z)` (even count, rotation). Required for Track01 / Track02 / Track03 vs wipeout-rewrite (L/R swapped, ads backwards without it).
 
 `DEFAULT_UNITS_PER_METER = 106.5` in `psx_track_common.py` (documented lap length / raw spline length). Override `--units-per-meter` or `1.0` for raw PSX units. Elevation cross-check ~33.3 (~3.2× gap, unresolved) — do not silently change scale mid-track.
 

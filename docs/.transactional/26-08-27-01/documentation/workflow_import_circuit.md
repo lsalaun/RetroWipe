@@ -77,7 +77,7 @@ Convention de travail : les intermédiaires vont dans `_converted_tracks/` (à l
 Tous les convertisseurs Python partagent les mêmes options. **Les passer à l'identique** sur géométrie, sections, flags et décor, sinon mesh / courbe / pads ne coïncident plus.
 
 - **Endianness** : `TRACK.TRV` / `TRF` / `TRS` et `LIBRARY.TTF` / `SCENE.PRM` sont **big-endian**. `LIBRARY.CMP` / `SCENE.CMP` / `SKY.CMP` (en-tête + TIM) sont **little-endian**. Un `IndexError` sur un index de sous-tuile (ex. 65280) est le symptôme classique d'un mélange LE/BE.
-- **Axes** : le moteur source a +Y vers le bas. Les scripts nient Y (Godot/glTF = +Y up) et inversent le winding. `--flip-z` nie aussi Z (miroir gauche/droite) ; ne l'activer que si le premier export est visuellement mirroir. Track01 / Track02 n'en ont **pas** besoin.
+- **Axes** : le moteur source a +Y vers le bas. Les scripts nient Y (Godot/glTF = +Y up) et inversent le winding. Le défaut `(x,-y,z)` est une **réflexion**. `--flip-z` nie aussi Z (`(x,-y,-z)`, rotation). **Obligatoire** pour Track01 / Track02 / Track03 vs wipeout-rewrite (sans lui : gauche/droite inversés, pubs à l'envers).
 - **Échelle** : `DEFAULT_UNITS_PER_METER = 106.5` (`psx_track_common.py`). C'est une estimation (longueur de lap documentée / longueur brute de spline). Surcharger avec `--units-per-meter` si une meilleure constante apparaît, ou `1.0` pour rester en unités PSX brutes.
 - **Winding PRM** : le rendu original n'utilise pas l'ordre stocké. Tris = `(c2, c1, c0)` ; quads = deux tris `(c2,c1,c0)` puis `(c2,c3,c1)`. Les convertisseurs le bakent avant la correction d'axes.
 
@@ -99,7 +99,8 @@ py convert_track_geometry.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\TRACK.TRF `
   D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_mesh.gltf `
   --library-cmp D:\code\wipeout-rewrite\wipeout\TRACKNN\LIBRARY.CMP `
-  --library-ttf D:\code\wipeout-rewrite\wipeout\TRACKNN\LIBRARY.TTF
+  --library-ttf D:\code\wipeout-rewrite\wipeout\TRACKNN\LIBRARY.TTF `
+  --flip-z
 ```
 
 Produit :
@@ -108,7 +109,7 @@ Produit :
 - `Track_NN_mesh_textures/tex_*.png` (une tuile 128×128 par id de texture réellement utilisé)
 
 Sans `--library-*`, le script cherche `library.cmp` / `library.ttf` à côté du `.TRV` (insensible à la casse). `--no-textures` saute l'export PNG.
-
+Track01 / Track02 / Track03 se convertissent **avec** `--flip-z` (le défaut `(x,-y,z)` est un miroir vs wipeout-rewrite). Si un nouveau circuit sort encore miroir après `--flip-z`, ne pas improviser un autre axe : revérifier que le flag est bien passé à **tous** l
 Contrôle : le log doit donner des indices de faces dans la plage, des normales unitaires, et un nombre de textures cohérent. Si la piste est à l'envers ou mirroir, relancer avec `--flip-z` **et** répercuter le flag sur les autres convertisseurs.
 
 ### 4.2 Ligne centrale IA
@@ -116,7 +117,8 @@ Contrôle : le log doit donner des indices de faces dans la plage, des normales 
 ```powershell
 py convert_track_sections.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\TRACK.TRS `
-  D:\code\wipeout-rewrite\_converted_tracks\track_NN\track_NN_curve.json
+  D:\code\wipeout-rewrite\_converted_tracks\track_NN\track_NN_curve.json `
+  --flip-z
 ```
 
 Le script suit `section.next` depuis `--start` (défaut 0) jusqu'à boucler. Les branches `junction` sont ignorées (une seule racing line, consommée par `track_center_line.gd`).
@@ -140,7 +142,8 @@ Si `closed=false`, le parcours n'est pas revenu au départ : essayer un autre `-
 py convert_track_face_flags.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\TRACK.TRV `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\TRACK.TRF `
-  D:\code\wipeout-rewrite\_converted_tracks\track_NN\track_NN_face_flags.json
+  D:\code\wipeout-rewrite\_converted_tracks\track_NN\track_NN_face_flags.json `
+  --flip-z
 ```
 
 Exporte uniquement :
@@ -157,12 +160,14 @@ Chaque entrée a `face_index` et `center` (moyenne des 4 sommets du quad, même 
 py convert_track_scenery.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\SCENE.PRM `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\SCENE.CMP `
-  D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_scene.gltf
+  D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_scene.gltf `
+  --flip-z
 
 py convert_track_scenery.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\SKY.PRM `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\SKY.CMP `
-  D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_sky.gltf
+  D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_sky.gltf `
+  --flip-z
 ```
 
 Les origines PRM sont bakées dans les sommets (un mesh statique combiné). Sprites (`TSPR`/`BSPR`), splines et lumières sont parsés pour rester alignés sur le flux binaire, mais ne génèrent pas de géométrie.

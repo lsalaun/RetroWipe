@@ -77,7 +77,7 @@ Convention de travail : les intermédiaires vont dans `_converted_tracks/` (à l
 Tous les convertisseurs Python partagent les mêmes options. **Les passer à l'identique** sur géométrie, sections, flags et décor, sinon mesh / courbe / pads ne coïncident plus.
 
 - **Endianness** : `TRACK.TRV` / `TRF` / `TRS` et `LIBRARY.TTF` / `SCENE.PRM` sont **big-endian**. `LIBRARY.CMP` / `SCENE.CMP` / `SKY.CMP` (en-tête + TIM) sont **little-endian**. Un `IndexError` sur un index de sous-tuile (ex. 65280) est le symptôme classique d'un mélange LE/BE.
-- **Axes** : le moteur source a +Y vers le bas. Les scripts nient Y (Godot/glTF = +Y up) et inversent le winding. Le défaut `(x,-y,z)` est une **réflexion**. `--flip-z` nie aussi Z (`(x,-y,-z)`, rotation). **Obligatoire** pour Track01 / Track02 / Track03 vs wipeout-rewrite (sans lui : gauche/droite inversés, pubs à l'envers).
+- **Axes** : le moteur source a +Y vers le bas. Les scripts nient Y (Godot/glTF = +Y up). **Sans `--flip-z`** le transform est `(x,-y,z)` — une **réflexion** (gauche/droite inversés, pubs à l'envers). **Le pipeline A passe `--flip-z` par défaut** : `(x,-y,-z)` (rotation). Le flag va sur **tous** les convertisseurs (géométrie, sections, flags, décor, ciel). Ne pas l'omettre « pour tester ».
 - **Échelle** : `DEFAULT_UNITS_PER_METER = 106.5` (`psx_track_common.py`). C'est une estimation (longueur de lap documentée / longueur brute de spline). Surcharger avec `--units-per-meter` si une meilleure constante apparaît, ou `1.0` pour rester en unités PSX brutes.
 - **Winding PRM** : le rendu original n'utilise pas l'ordre stocké. Tris = `(c2, c1, c0)` ; quads = deux tris `(c2,c1,c0)` puis `(c2,c3,c1)`. Les convertisseurs le bakent avant la correction d'axes.
 
@@ -109,8 +109,8 @@ Produit :
 - `Track_NN_mesh_textures/tex_*.png` (une tuile 128×128 par id de texture réellement utilisé)
 
 Sans `--library-*`, le script cherche `library.cmp` / `library.ttf` à côté du `.TRV` (insensible à la casse). `--no-textures` saute l'export PNG.
-Track01 / Track02 / Track03 se convertissent **avec** `--flip-z` (le défaut `(x,-y,z)` est un miroir vs wipeout-rewrite). Si un nouveau circuit sort encore miroir après `--flip-z`, ne pas improviser un autre axe : revérifier que le flag est bien passé à **tous** l
-Contrôle : le log doit donner des indices de faces dans la plage, des normales unitaires, et un nombre de textures cohérent. Si la piste est à l'envers ou mirroir, relancer avec `--flip-z` **et** répercuter le flag sur les autres convertisseurs.
+
+Contrôle : le log doit donner des indices de faces dans la plage, des normales unitaires, et un nombre de textures cohérent. **Toujours** passer `--flip-z` (le défaut CLI sans flag est un miroir vs wipeout-rewrite). Si un circuit sort encore miroir **avec** `--flip-z` sur tous les convertisseurs, ne pas improviser un autre axe : s'arrêter et diagnostiquer.
 
 ### 4.2 Ligne centrale IA
 
@@ -357,7 +357,7 @@ d:\Godot_4\Godot_v4.6.1-stable_win64_console.exe --headless --path D:\code\wipeo
 ## 8. Checklist d'un nouveau circuit
 
 1. Identifier `TRACKNN` ↔ nom in-game via `game.c` / `TRACK.INF`.
-2. Convertir géométrie, sections, face flags, scene, sky **avec les mêmes** `--flip-z` / `--units-per-meter`.
+2. Convertir géométrie, sections, face flags, scene, sky **avec `--flip-z`** et le même `--units-per-meter` sur chaque convertisseur.
 3. Ré-exporter les 3 glTF en GLB via Blender headless.
 4. Copier GLB + JSON dans `godot/src/assets/tracks/Track_NN/` (même nom de fichier si remplacement).
 5. `godot --headless --path godot/src --import` puis lire les UID dans les `.import`.

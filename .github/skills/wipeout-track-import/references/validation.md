@@ -66,7 +66,7 @@ d:\Godot_4\Godot_v4.6.1-stable_win64_console.exe --headless --path D:\code\wipeo
 ## New-circuit checklist
 
 1. Identify TRACKNN ↔ in-game name via `game.c` / `TRACK.INF`.
-2. Convert geometry, sections, face flags, scene, sky with the same `--flip-z` / `--units-per-meter`.
+2. Convert geometry, sections, face flags, scene, sky with **`--flip-z`** and the same `--units-per-meter` on every converter.
 3. Re-export 3 glTF → GLB via Blender headless.
 4. Copy GLB + JSON into `godot/src/assets/tracks/Track_NN/` (same names on replace).
 5. `--import` then read UIDs from `.import`.

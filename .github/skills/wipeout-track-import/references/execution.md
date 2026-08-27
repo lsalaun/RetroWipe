@@ -7,7 +7,7 @@ This skill **runs** the import. Pasting a command list for the user is a failure
 1. Resolve `TRACKNN` → scratch `track_NN` → assets `Track_NN` → scene `TrackNN.tscn` using the naming table in `SKILL.md`.
 2. Verify source files exist (`TRACK.TRV`/`TRF`/`TRS`, `LIBRARY.CMP`/`TTF`, `SCENE.*`, `SKY.*`) with `Test-Path` / `list_dir` before converting.
 3. Create `_converted_tracks/track_NN/` if needed.
-4. Run converters from `godot/tools/psx_track/` with `py` (cwd that directory, or pass absolute script paths). Use PowerShell; chain with `;` never `&&`.
+4. Run converters from `godot/tools/psx_track/` with `py` (cwd that directory, or pass absolute script paths). **Always pass `--flip-z`** on geometry, sections, face flags, scenery, and sky. Use PowerShell; chain with `;` never `&&`.
 5. Run steps **serially**. Do not parallelize two Godot `--headless` jobs on `godot/src`. Python converts may be sequential too (shared scratch).
 6. After each convert, check exit code **and** log: in-range indices, `closed: true`, scenery parse at EOF, max texture index == CMP count − 1.
 7. Run Blender three times (mesh, scene, sky). Confirm each `.glb` exists and is non-tiny before copy.
@@ -34,7 +34,7 @@ Around native Godot, if the harness uses `$ErrorActionPreference = 'Stop'`, set 
 - Converter `IndexError` / index `65280` → endian mix; fix invocation, do not patch indices.
 - Curve glTF empty / AABB zero on a “curve” GLB → you used the wrong exporter; switch to JSON.
 - `closed: false` → try `--start` or inspect junctions before wiring CenterLine.
-- Visual mirror on first mesh → rerun **all** converters with `--flip-z`, including ones already done.
+- Visual mirror → you omitted `--flip-z` on at least one converter. Rerun **all** converters with `--flip-z`; do not invent another axis. Still mirrored **with** `--flip-z` on every step → stop and report, do not improvise.
 - Basis / `get_rotation_quaternion` errors → row-major literal or over-rounding; recompute, do not tweak digits by eye.
 
 ## PowerShell notes

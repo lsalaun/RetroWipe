@@ -60,7 +60,7 @@ Need a Godot circuit from PSX TRACKNN?
 └─ Scene already has GLB+JSON? → Skip convert; wire + validate. See ./references/scene-wiring.md and ./references/validation.md
 ```
 
-**Same flags on every converter for one track.** `--flip-z` and `--units-per-meter` must match geometry, sections, face flags, and scenery. Track01 / Track02 / Track03 **all use `--flip-z`**: default `(x,-y,z)` is a reflection (L/R + ads mirrored vs wipeout-rewrite). Default scale is `DEFAULT_UNITS_PER_METER = 106.5` in `godot/tools/psx_track/psx_track_common.py`.
+**Default Pipeline A flags:** pass `--flip-z` on every converter (geometry, sections, face flags, scenery, sky). Omitting it yields `(x,-y,z)` — a reflection (L/R swapped, ads backwards vs wipeout-rewrite). `--units-per-meter` must also match on every step. Default scale is `DEFAULT_UNITS_PER_METER = 106.5` in `godot/tools/psx_track/psx_track_common.py`.
 
 Identify the circuit first: `wipeout/TRACKNN/TRACK.INF` (`outName = trakNN`) plus `src/wipeout/game.c` `def.circuits` (`.path = "wipeout/trackNN/"`). Examples: TRACK01 = Terramax (Venom), TRACK02 = Altima VII (Venom).
 
@@ -68,12 +68,13 @@ Identify the circuit first: `wipeout/TRACKNN/TRACK.INF` (`outName = trakNN`) plu
 
 1. Converters are in `godot/tools/`, **not** `godot/src/tools/`. `src/tools` only inspects/validates (`extends SceneTree`, Godot `-s`).
 2. **Endianness is mixed.** TRV/TRF/TRS, TTF, PRM = big-endian. CMP headers + TIM = little-endian. Symptom of mix-up: `IndexError` on a sub-tile index like `65280`.
-3. **Never export a Blender Curve via glTF.** Zero bevel/extrude → empty Node3D; Godot gets no Path3D. Use `export_track_curve.py` → JSON.
-4. Colliders: trimesh (`create_trimesh_shape`) + `shape.backface_collision = true` on **TrackMesh only**. Convex hulls inflate into the lane.
-5. `.tscn` `Transform3D(a,b,c, d,e,f, g,h,i, ox,oy,oz)` is **row-major**. If `basis.x=(x1,x2,x3)` etc., write `Transform3D(x1,y1,z1, x2,y2,z2, x3,y3,z3, ox,oy,oz)`. Consecutive column triples = transpose ≈ 90° heading error. Emit ≥12 invariant decimals; never round to 5 dp (Basis must stay normalized).
-6. After copying new `.glb`, run Godot `--import` **before** writing `ext_resource` UIDs. Stale UID in `.tscn` still resolves the old asset even if `path=` was updated. Read `uid://` from `*.glb.import`.
-7. Headless validators must `quit()` themselves (stdout is fully buffered). Do not kill the process. Do not run two validators in parallel on the same project. Reads that depend on `_ready()` (e.g. `CenterLine.curve`) wait 2–3 `physics_frame`s; `_initialize()` is too early. Scripts must `extends SceneTree`, not `Node`.
-8. Overwrite deliverables **in place** (same filename) so existing UID / `.import` files stay valid.
+3. **Always pass `--flip-z`** on geometry, sections, face flags, scenery, and sky. Do not treat it as optional or track-specific. Do not invent extra axis hacks if the mesh still looks wrong.
+4. **Never export a Blender Curve via glTF.** Zero bevel/extrude → empty Node3D; Godot gets no Path3D. Use `export_track_curve.py` → JSON.
+5. Colliders: trimesh (`create_trimesh_shape`) + `shape.backface_collision = true` on **TrackMesh only**. Convex hulls inflate into the lane.
+6. `.tscn` `Transform3D(a,b,c, d,e,f, g,h,i, ox,oy,oz)` is **row-major**. If `basis.x=(x1,x2,x3)` etc., write `Transform3D(x1,y1,z1, x2,y2,z2, x3,y3,z3, ox,oy,oz)`. Consecutive column triples = transpose ≈ 90° heading error. Emit ≥12 invariant decimals; never round to 5 dp (Basis must stay normalized).
+7. After copying new `.glb`, run Godot `--import` **before** writing `ext_resource` UIDs. Stale UID in `.tscn` still resolves the old asset even if `path=` was updated. Read `uid://` from `*.glb.import`.
+8. Headless validators must `quit()` themselves (stdout is fully buffered). Do not kill the process. Do not run two validators in parallel on the same project. Reads that depend on `_ready()` (e.g. `CenterLine.curve`) wait 2–3 `physics_frame`s; `_initialize()` is too early. Scripts must `extends SceneTree`, not `Node`.
+9. Overwrite deliverables **in place** (same filename) so existing UID / `.import` files stay valid.
 
 Full gotcha list: [gotchas.md](./references/gotchas.md).
 
@@ -82,10 +83,10 @@ Full gotcha list: [gotchas.md](./references/gotchas.md).
 Work dir: `_converted_tracks/track_NN/`. Run every step: [pipeline-psx.md](./references/pipeline-psx.md), [execution.md](./references/execution.md).
 
 1. Map `TRACKNN` → in-game name / class (`TRACK.INF` + `game.c`).
-2. Create the scratch dir; run mesh convert (`TRACK.TRV`+`TRACK.TRF`+`LIBRARY.CMP`/`TTF`) → textured glTF + PNGs. Stop if the log is bad.
-3. Run sections convert (`TRACK.TRS`) → `track_NN_curve.json` (`closed: true` expected).
-4. Run face-flags convert → `track_NN_face_flags.json` (pickup / boost / start_grid).
-5. Run scenery + sky convert (`SCENE.*`, `SKY.*`) → two glTFs. Do not merge with the track mesh.
+2. Create the scratch dir; run mesh convert (`TRACK.TRV`+`TRACK.TRF`+`LIBRARY.CMP`/`TTF`) with `--flip-z` → textured glTF + PNGs. Stop if the log is bad.
+3. Run sections convert (`TRACK.TRS`) with `--flip-z` → `track_NN_curve.json` (`closed: true` expected).
+4. Run face-flags convert with `--flip-z` → `track_NN_face_flags.json` (pickup / boost / start_grid).
+5. Run scenery + sky convert (`SCENE.*`, `SKY.*`) with `--flip-z` → two glTFs. Do not merge with the track mesh.
 6. Run Blender-reexport **each** of mesh/scene/sky glTF → standalone `.glb` via `godot/tools/blender/convert_track_mesh.py`.
 7. Copy into `godot/src/assets/tracks/Track_NN/` (glb ×3 + curve json + face_flags json). Overwrite in place.
 8. Run `godot --headless --path godot/src --import`; read UIDs from `.import` with `read_file`.
@@ -119,7 +120,7 @@ Runtime consumers: `track_center_line.gd`, `track_mesh_collider.gd`, `track_game
 
 ## Done when
 
-- [ ] Same `--flip-z` / `--units-per-meter` on all converters
+- [ ] `--flip-z` **and** the same `--units-per-meter` on all converters (Pipeline A default)
 - [ ] Three separate GLBs (mesh / scene / sky), not one combined file
 - [ ] Curve JSON `closed: true` (or documented why not); not an empty glTF curve
 - [ ] Assets in `godot/src/assets/tracks/Track_NN/` with matching `.import` UIDs in the `.tscn`

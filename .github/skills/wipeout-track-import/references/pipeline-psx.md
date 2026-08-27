@@ -1,6 +1,6 @@
 # Pipeline A — full PSX TRACKNN import
 
-Run converters from `godot/tools/psx_track/` unless noted. Pass **identical** `--flip-z` / `--units-per-meter` on every step. Track01 / Track02 / Track03: **`--flip-z` on every converter** (default Y-only negate mirrors L/R and billboard text vs wipeout-rewrite).
+Run converters from `godot/tools/psx_track/` unless noted. **Default: `--flip-z` on every converter.** Pass identical `--flip-z` / `--units-per-meter` on geometry, sections, face flags, scenery, and sky. Omitting `--flip-z` is `(x,-y,z)` — a reflection vs wipeout-rewrite (L/R + ads mirrored).
 
 Scratch: `_converted_tracks/track_NN/`. Deliverables: `godot/src/assets/tracks/Track_NN/`. Scene: `godot/src/scenes/TrackNN.tscn` (no underscore — `Track03.tscn`, not `Track_03.tscn`).
 
@@ -33,7 +33,7 @@ py convert_track_geometry.py `
 
 Produces glTF + `.bin` + `Track_NN_mesh_textures/tex_*.png`. Without `--library-*`, looks next to the `.TRV` (case-insensitive). `--no-textures` skips PNG.
 
-Log checks: in-range face indices, unit normals, coherent texture count. Track01 / Track02 / Track03 use `--flip-z` on every converter (default Y-only negate is a mirror vs wipeout-rewrite).
+Log checks: in-range face indices, unit normals, coherent texture count. Pipeline A **always** passes `--flip-z` (Y-only negate without it is a mirror).
 
 ## 2. AI center line
 

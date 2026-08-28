@@ -57,6 +57,18 @@ const CIRCUIT_SETTINGS: Dictionary = {
 		0: {"behind_speed": 450.0, "spread_base": 40.0, "spread_factor": 11.0},
 		1: {"behind_speed": 500.0, "spread_base": 30.0, "spread_factor": 11.0},
 	},
+	"ARRIDOS IV": {
+		0: {"behind_speed": 350.0, "spread_base": 80.0, "spread_factor": 15.0},
+		1: {"behind_speed": 450.0, "spread_base": 30.0, "spread_factor": 11.0},
+	},
+	"SILVERSTREAM": {
+		0: {"behind_speed": 150.0, "spread_base": 10.0, "spread_factor": 8.0},
+		1: {"behind_speed": 150.0, "spread_base": 10.0, "spread_factor": 8.0},
+	},
+	"FIRESTAR": {
+		0: {"behind_speed": 200.0, "spread_base": 40.0, "spread_factor": 11.0},
+		1: {"behind_speed": 500.0, "spread_base": 40.0, "spread_factor": 11.0},
+	},
 }
 
 

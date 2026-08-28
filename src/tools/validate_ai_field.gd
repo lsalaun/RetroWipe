@@ -7,7 +7,11 @@ extends SceneTree
 ## ~400 physics frames at 60 Hz) before GO, so the motion check has to sit well
 ## past the countdown.
 const WAIT_FRAMES := 600
-const MAX_AI_LATERAL := 7.5
+## A remote holding a DPA lane sits a quarter of the track width off centre --
+## about 9.5 m on Terramax (see WipeoutShipAI._lane_offset_magnitude). This
+## bound is there to catch a ship that has left the road, not one that is
+## deliberately hugging a side.
+const MAX_AI_LATERAL := 12.0
 const MAX_AI_WALL_HITS := 8
 
 var _frames := 0

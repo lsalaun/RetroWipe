@@ -75,6 +75,12 @@ func _process(_delta: float) -> void:
 
 func fire_weapon(ship: WipeoutShip, weapon_type: WipeoutWeapon.WeaponType, target: WipeoutShip = null) -> WipeoutWeapon:
 	"""Fire a weapon from a ship. Mirrors weapons_fire()."""
+	# weapons_fire() ends on ship->weapon_type = WEAPON_TYPE_NONE. The player
+	# path clears the slot in WipeoutShip.fire_weapon() as well, but the AI delay
+	# timer routes straight in here, and without this an AI that fired once would
+	# keep re-firing the same weapon on every later DPA decision.
+	if is_instance_valid(ship):
+		ship.weapon_type = WipeoutWeapon.WeaponType.NONE
 	# weapon_fire_mine() queues WEAPON_MINE_COUNT weapons at once, each with its
 	# own staggered release timer.
 	if weapon_type == WipeoutWeapon.WeaponType.MINE:

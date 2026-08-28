@@ -1004,10 +1004,21 @@ func remove_shield() -> void:
 	shield_timer = 0.0
 
 
+## weapon_update_ebolt(): SHIP_ELECTROED is set for the bolt duration, and
+## ebolt_effect_timer is the 0.1 s accumulator that paces the jolts -- not a
+## second copy of the duration.
 func apply_electro_effect(duration: float) -> void:
-	"""Apply electric effect that disables controls"""
 	ebolt_timer = duration
-	ebolt_effect_timer = duration
+	ebolt_effect_timer = 0.0
+
+
+## Yank an electroed ship every 0.1 s. This is ship_player.c's variant: a random
+## kick on the yaw axis plus an occasional thrust cut. WipeoutShipAI overrides it
+## with ship_ai.c's, which shakes the hull out of position instead.
+func _apply_electro_jolt() -> void:
+	yaw_velocity += randf_range(-0.5, 0.5)
+	if randi_range(0, 9) == 0:
+		thrust_mag *= 0.75
 
 
 func get_random_weapon(weapon_class: int = 1) -> WipeoutWeapon.WeaponType:
@@ -1031,6 +1042,10 @@ func _update_weapons(delta: float) -> void:
 
 	if ebolt_timer > 0.0:
 		ebolt_timer -= delta
+		ebolt_effect_timer += delta
+		if ebolt_effect_timer > 0.1:
+			ebolt_effect_timer -= 0.1
+			_apply_electro_jolt()
 
 	if _fire_requested:
 		_fire_requested = false

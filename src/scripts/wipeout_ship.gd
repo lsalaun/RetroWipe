@@ -166,6 +166,7 @@ var ebolt_effect_timer: float = 0.0
 var revcon_timer: float = 0.0
 var special_timer: float = 0.0
 var weapon_fire_cooldown: float = 0.0
+var _fire_requested: bool = false # latched by _process(), consumed by _update_weapons()
 
 func _ready() -> void:
 	add_to_group(&"ships")
@@ -1031,5 +1032,16 @@ func _update_weapons(delta: float) -> void:
 	if ebolt_timer > 0.0:
 		ebolt_timer -= delta
 
-	if is_player_controlled and race_control_enabled and Input.is_action_just_pressed(&"ship_fire"):
-		fire_held_weapon()
+	if _fire_requested:
+		_fire_requested = false
+		if is_player_controlled and race_control_enabled:
+			fire_held_weapon()
+
+
+## The press is latched in _process(), not polled in _physics_process(): a physics
+## tick can fall between two frames and miss the one-frame "just pressed" edge,
+## which silently leaves the ship holding its first weapon for the whole race --
+## and a full slot makes every later pad refuse to re-arm it.
+func _process(_delta: float) -> void:
+	if is_player_controlled and Input.is_action_just_pressed(&"ship_fire"):
+		_fire_requested = true

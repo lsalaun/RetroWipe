@@ -37,18 +37,50 @@ func _run_checks() -> void:
 		if load(path) == null:
 			_failures.append("weapon model missing: %s" % path)
 
+	# 1b. The fire action exists. Without it the player can never spend a weapon,
+	# so the first pickup sticks forever and every later pad refuses to re-arm a
+	# full slot -- which reads as "the pads only ever give one weapon".
+	if not InputMap.has_action(&"ship_fire"):
+		_failures.append("input action 'ship_fire' is not registered")
+	else:
+		var events := InputMap.action_get_events(&"ship_fire")
+		print("  ship_fire bound to %d event(s)" % events.size())
+		if events.is_empty():
+			_failures.append("input action 'ship_fire' has no events bound")
+
 	# 2. The manager resolves (autoload in game, fallback under --script).
 	var manager := WipeoutWeaponManager.instance(self)
 	if manager == null:
 		_failures.append("weapon manager could not be resolved")
 		return
 
-	# 3. The random table only ever yields weapons the port implements.
-	for i in 200:
+	# 3. The random table yields every implemented type, in the proportions
+	# weapon_get_random_type() uses. A table that collapses onto one weapon still
+	# "works" from every other angle, so the distribution itself is the check.
+	var counts := {}
+	const SAMPLES := 6000
+	for i in SAMPLES:
 		var picked: int = manager.get_random_weapon(manager.WEAPON_CLASS_ANY)
 		if WipeoutWeapon.weapon_name(picked).is_empty():
 			_failures.append("get_random_weapon returned unimplemented type %d" % picked)
 			break
+		counts[picked] = int(counts.get(picked, 0)) + 1
+
+	var total_weight := 0
+	for entry in manager.WEAPON_WEIGHTS_ANY:
+		total_weight += int(entry[1])
+	for entry in manager.WEAPON_WEIGHTS_ANY:
+		var wtype: int = entry[0]
+		var expected := float(entry[1]) / float(total_weight)
+		var actual := float(counts.get(wtype, 0)) / float(SAMPLES)
+		print("  %-8s expected %5.1f%%  actual %5.1f%%" % [
+			WipeoutWeapon.weapon_name(wtype), expected * 100.0, actual * 100.0
+		])
+		# Generous band: this catches a collapsed or mis-indexed table, not noise.
+		if absf(actual - expected) > 0.06:
+			_failures.append("%s drawn %.1f%% of the time, expected %.1f%%" % [
+				WipeoutWeapon.weapon_name(wtype), actual * 100.0, expected * 100.0
+			])
 
 	# 4. The track actually spawned pads.
 	var pads := _find_pads(_main)
@@ -73,6 +105,20 @@ func _run_checks() -> void:
 		if player.weapon_type != WipeoutWeapon.WeaponType.ROCKET:
 			_failures.append("pad overwrote a weapon the ship was already holding")
 		print("  pads=%d  first pickup=%s" % [pads.size(), WipeoutWeapon.weapon_name(held)])
+
+		# Walk every pad with an empty slot: what the player actually receives
+		# should vary, not collapse onto one type.
+		var via_pads := {}
+		var hull := player.get_node("HullArea")
+		for p in pads:
+			p._is_active = true
+			player.weapon_type = WipeoutWeapon.WeaponType.NONE
+			p._on_area_entered(hull)
+			var got := WipeoutWeapon.weapon_name(player.weapon_type)
+			via_pads[got] = int(via_pads.get(got, 0)) + 1
+		print("  via pads over %d pickups: %s" % [pads.size(), via_pads])
+		if via_pads.size() == 1:
+			_failures.append("every pad handed out the same weapon: %s" % via_pads.keys())
 
 	# 6. Firing spends the slot and puts a weapon in the scene.
 	player.weapon_type = WipeoutWeapon.WeaponType.ROCKET

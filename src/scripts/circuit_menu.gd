@@ -21,7 +21,7 @@ func _ready() -> void:
 
 func _on_circuit_selected(scene_path: String) -> void:
 	TrackSelection.select_track(scene_path)
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	TrackSelection.start_race(get_tree())
 
 
 func _on_back_pressed() -> void:

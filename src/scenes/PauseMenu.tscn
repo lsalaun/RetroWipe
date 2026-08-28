@@ -3,9 +3,12 @@
 [ext_resource type="Script" path="res://scripts/pause_menu.gd" id="1_script"]
 
 [node name="PauseMenu" type="CanvasLayer"]
+process_mode = 3
 script = ExtResource("1_script")
 
 [node name="Panel" type="Panel" parent="."]
+visible = false
+mouse_filter = 2
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -49,3 +52,20 @@ dialog_text = "ARE YOU SURE YOU WANT TO QUIT?"
 [node name="RestartConfirmDialog" type="ConfirmationDialog" parent="."]
 title = "RESTART"
 dialog_text = "ARE YOU SURE YOU WANT TO RESTART?"
+
+[node name="MenuButton" type="Button" parent="."]
+visible = false
+mouse_filter = 2
+process_mode = 3
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -96.0
+offset_top = -72.0
+offset_right = 96.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 0
+text = "MENU"

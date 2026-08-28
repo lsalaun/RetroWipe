@@ -24,7 +24,7 @@ func _on_pilot_selected(ship: Dictionary) -> void:
 	if RaceSetup.race_type == RaceSetup.RACE_TYPE_CHAMPIONSHIP:
 		# Championships always start on the first available circuit.
 		TrackSelection.select_track(TrackSelection.TRACKS[0]["scene"])
-		get_tree().change_scene_to_file("res://scenes/main.tscn")
+		TrackSelection.start_race(get_tree())
 	else:
 		get_tree().change_scene_to_file("res://scenes/CircuitMenu.tscn")
 

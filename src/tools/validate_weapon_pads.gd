@@ -64,14 +64,14 @@ func _validate_pad(pad: Node3D, index: int) -> Array:
 	return issues
 
 
-func _find_nodes_of_type(root: Node, class_name: String) -> Array:
+func _find_nodes_of_type(root: Node, target_class: String) -> Array:
 	"""Find all nodes of a specific class"""
 	var results = []
 
-	if root.get_class() == class_name or root.is_class(class_name):
+	if root.get_class() == target_class or root.is_class(target_class):
 		results.append(root)
 
 	for child in root.get_children():
-		results.append_array(_find_nodes_of_type(child, class_name))
+		results.append_array(_find_nodes_of_type(child, target_class))
 
 	return results

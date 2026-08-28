@@ -35,13 +35,23 @@ Never convex-decompose edge shelves / side walls: inflated hulls false-trigger w
 
 Do **not** use JSON point 0. `convert_track_sections.py --start 0` walks `section.next` from TRS section 0; that is the topology loop, not the starting grid. Original `ships_init()` walks `start_line_pos - 15` sections first (`game.c` `def.circuits[].settings[].start_line_pos`; Terramax / Altima VII venom = 27 → index **12**). TRACK01 section 0 sits on the post-jump drop (void); index 12 is the flat.
 
+Do not hand-compute the literal. Use:
+
+```powershell
+py D:\code\wipeout-rewrite\godot\tools\psx_track\compute_ship_spawn.py `
+  D:\code\wipeout-rewrite\godot\src\assets\tracks\Track_NN\track_NN_curve.json `
+  --track TRACKNN
+```
+
+(`import_track.py` prints the same string.) Index comes from `circuit_catalog.py` (`start_line_pos - 15`). `|v| < 1e-12` is printed as `0.000000000000`.
+
 Yaw-only (no pitch/roll) from curve points `p = points[i]`, `q = points[i+1]` with `i = start_line_pos - 15`:
 
 1. `forward = normalize((q.x - p.x, 0, q.z - p.z))` — ignore Δy for orientation.
 2. `basis.z = -forward`, `basis.y = (0, 1, 0)`, `basis.x = UP.cross(basis.z)`.
 3. Origin XZ = p.xz exactly; **Y = p.y + 2.0** (hover clearance). Valid only because TRS conversion bakes real section altitude.
 
-Always reproduce Track01's published `Transform3D` from **Track01's** JSON at that index before trusting a new track.
+Always reproduce Track01's published `Transform3D` from **Track01's** JSON at that index before trusting a new track (`index=12`, origin `(-356.807511737089, 3.164319248826, 299.417840375587)`).
 
 Blender-curve tracks: do not use +2.0; raycast against mesh (see pipeline-blender-curve.md).
 

@@ -6,6 +6,70 @@ Scratch: `_converted_tracks/track_NN/`. Deliverables: `godot/src/assets/tracks/T
 
 **Run** these commands (see [execution.md](./execution.md)); do not only print them.
 
+## Default: orchestrator
+
+Do **not** chain the five converters + Blender + copy by hand for a normal import. Run:
+
+```powershell
+py D:\code\wipeout-rewrite\godot\tools\psx_track\import_track.py TRACKNN
+```
+
+That script:
+
+1. Checks `wipeout/TRACKNN/` for `TRACK.TRV/TRF/TRS`, `LIBRARY.CMP/TTF`, `SCENE.PRM/CMP`, `SKY.PRM/CMP`.
+2. Prints `circuit_catalog.py` name / `in_game` (`def.circuits`). TRACK15: `in_game=False`.
+3. Writes scratch glTF/JSON under `_converted_tracks/track_NN/`.
+4. Re-exports mesh / scene / sky → `.glb` via `godot/tools/blender/convert_track_mesh.py`.
+5. Copies GLB + JSON into `godot/src/assets/tracks/Track_NN/` (same filename → UID kept).
+6. Prints yaw-only `ShipSpawn` at index `start_line_pos - 15` (not point 0).
+
+| Flag | Use |
+| --- | --- |
+| *(none)* | Convert + GLB + copy; **does not** write `TrackNN.tscn` |
+| `--write-scene` | Write `godot/src/scenes/TrackNN.tscn` **only if missing** (no `ext_resource` UIDs) |
+| `--overwrite-scene` | Required to clobber an existing `.tscn`. Do not use on Track01–14 unless the user asked. |
+| `--godot-import` | `godot --headless --path godot/src --import` after copy |
+| `--skip-blender` / `--skip-copy` | Parse debug; stop at glTF/JSON |
+| `--no-flip-z` | Mirror diagnostic only — not a deliverable |
+| `--units-per-meter` | Default `106.5`; pushed to every converter |
+| `--godot-bin` | Override default `d:\Godot_4\Godot_v4.6.1-stable_win64_console.exe` |
+
+Spawn only (JSON already produced):
+
+```powershell
+py D:\code\wipeout-rewrite\godot\tools\psx_track\compute_ship_spawn.py `
+  D:\code\wipeout-rewrite\godot\src\assets\tracks\Track_01\track_01_curve.json `
+  --track TRACK01
+```
+
+TRACK01 control: `index=12`, origin `(-356.807511737089, 3.164319248826, 299.417840375587)`, `basis.y = (0,1,0)`, no `-0.000…`.
+
+### `start_line_pos` (`circuit_catalog.py`)
+
+Godot spawn index = C `start_line_pos` − 15.
+
+| TRACK | Name | Class | `start_line_pos` | Spawn index |
+| --- | --- | --- | --- | --- |
+| 01 | TERRAMAX | venom | 27 | 12 |
+| 02 | ALTIMA VII | venom | 27 | 12 |
+| 03 | ALTIMA VII RAPIER | rapier | 27 | 12 |
+| 04 | KARBONIS V | venom | 16 | 1 |
+| 05 | KARBONIS V RAPIER | rapier | 16 | 1 |
+| 06 | TERRAMAX RAPIER | rapier | 27 | 12 |
+| 07 | KORODERA RAPIER | rapier | 16 | 1 |
+| 08 | ARRIDOS IV | venom | 16 | 1 |
+| 09 | SILVERSTREAM | venom | 16 | 1 |
+| 10 | FIRESTAR | venom | 27 | 12 |
+| 11 | ARRIDOS IV RAPIER | rapier | 16 | 1 |
+| 12 | KORODERA | venom | 16 | 1 |
+| 13 | SILVERSTREAM RAPIER | rapier | 16 | 1 |
+| 14 | FIRESTAR RAPIER | rapier | 27 | 12 |
+| 15 | *(not in `def.circuits`)* | — | 27 (default) | 12 |
+
+`TRACK.INF` `outName` is **not** authoritative (TRACK15 says `trak1`).
+
+The numbered steps below are the **fallback** (debug one converter, or orchestrator unavailable). Prefer `import_track.py`.
+
 ## Source files (`wipeout/TRACKNN/`)
 
 | File | Usage |
@@ -17,7 +81,7 @@ Scratch: `_converted_tracks/track_NN/`. Deliverables: `godot/src/assets/tracks/T
 | `SCENE.PRM` + `SCENE.CMP` | Scenery |
 | `SKY.PRM` + `SKY.CMP` | Sky dome |
 
-`TRACK.INF` is tooling-only. Circuit name/class: `src/wipeout/game.c` `def.circuits`.
+`TRACK.INF` is tooling-only and **wrong** for TRACK15 (`outName = trak1`). Circuit name / class / `start_line_pos`: `circuit_catalog.py` (`src/wipeout/game.c` `def.circuits`).
 
 ## 1. Textured track mesh
 
@@ -82,7 +146,8 @@ Each entry: `face_index`, `center` (quad average, same space as mesh). TRACK01 h
 ```powershell
 py convert_track_scenery.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\SCENE.PRM `
-  D:\code\wipeout-rewrite\wipeout\TRACKNN\SCENE.CMP ` `
+  D:\code\wipeout-rewrite\wipeout\TRACKNN\SCENE.CMP `
+  D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_scene.gltf `
   --flip-z
 
 py convert_track_scenery.py `
@@ -90,7 +155,6 @@ py convert_track_scenery.py `
   D:\code\wipeout-rewrite\wipeout\TRACKNN\SKY.CMP `
   D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_sky.gltf `
   --flip-z
-  D:\code\wipeout-rewrite\_converted_tracks\track_NN\Track_NN_sky.gltf
 ```
 
 PRM origins baked into vertices (one combined static mesh). Sprites / splines / lights are parsed for stream alignment but produce no geometry.
@@ -131,6 +195,9 @@ Read `uid="uid://..."` from `*.glb.import`.
 
 | Tool | Role |
 | --- | --- |
+| `godot/tools/psx_track/import_track.py` | Orchestrator (Pipeline A default) |
+| `godot/tools/psx_track/circuit_catalog.py` | TRACKNN → name / `start_line_pos` |
+| `godot/tools/psx_track/compute_ship_spawn.py` | Row-major yaw-only `Transform3D` |
 | `godot/tools/psx_track/convert_track_geometry.py` | TRV+TRF (+CMP/TTF) → textured glTF |
 | `godot/tools/psx_track/convert_track_sections.py` | TRS → center-line JSON |
 | `godot/tools/psx_track/convert_track_face_flags.py` | pickup/boost/start_grid JSON |

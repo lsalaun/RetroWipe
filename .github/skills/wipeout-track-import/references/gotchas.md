@@ -1,5 +1,9 @@
 # Format, axes, and import gotchas
 
+## Circuit identity
+
+`TRACK.INF` `outName` is not a source of truth (TRACK15 says `trak1`). Use `godot/tools/psx_track/circuit_catalog.py` (`def.circuits`). Spawn index = `start_line_pos - 15`, never JSON point 0.
+
 ## Mixed endianness
 
 Not uniform across PSX assets:

@@ -1,0 +1,28 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c1l8vtgnoo2id" path="res://assets/tracks/Track_05/Track_05_mesh.glb" id="1_mesh"]
+[ext_resource type="Script" uid="uid://b2qabxspa48k3" path="res://scripts/track_center_line.gd" id="2_script"]
+[ext_resource type="Script" uid="uid://b3xoy2a264go8" path="res://scripts/track_mesh_collider.gd" id="3_script"]
+[ext_resource type="PackedScene" uid="uid://dq5x2mp7cftw3" path="res://assets/tracks/Track_05/Track_05_scene.glb" id="4_scene"]
+[ext_resource type="PackedScene" uid="uid://dpk1qwck86fji" path="res://assets/tracks/Track_05/Track_05_sky.glb" id="5_sky"]
+[ext_resource type="Script" uid="uid://y6hkyiyv3clx" path="res://scripts/track_gameplay_zones.gd" id="6_script"]
+
+[node name="Track05" type="Node3D"]
+script = ExtResource("3_script")
+
+[node name="TrackMesh" parent="." instance=ExtResource("1_mesh")]
+
+[node name="Scenery" parent="." instance=ExtResource("4_scene")]
+
+[node name="Sky" parent="." instance=ExtResource("5_sky")]
+
+[node name="CenterLine" type="Path3D" parent="."]
+script = ExtResource("2_script")
+source_json = "res://assets/tracks/Track_05/track_05_curve.json"
+
+[node name="GameplayZones" type="Node3D" parent="."]
+script = ExtResource("6_script")
+source_json = "res://assets/tracks/Track_05/track_05_face_flags.json"
+
+[node name="ShipSpawn" type="Marker3D" parent="."]
+transform = Transform3D(0.999999837293, 0.000000000000, 0.000570450563, 0.000000000000, 1.000000000000, 0.000000000000, -0.000570450563, 0.000000000000, 0.999999837293, 327.718309859155, 3.164319248826, 89.727699530516)

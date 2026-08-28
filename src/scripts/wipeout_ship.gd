@@ -156,6 +156,16 @@ var _track_right_dir: Vector3 = Vector3.RIGHT # across-lane axis from the neares
 var _track_floor_normal: Vector3 = Vector3.UP # racing-surface normal under the center line; steep floors stay aligned with this, edge shelves do not
 var _track_center_point: Vector3 = Vector3.ZERO # nearest racing-line sample; void checks drop against this Y, not the last crest
 
+# Weapon Attributes (ported from ship.c)
+var weapon_type: WipeoutWeapon.WeaponType = WipeoutWeapon.WeaponType.NONE
+var weapon_target: WipeoutShip = null
+var shield_active: bool = false
+var shield_timer: float = 0.0
+var ebolt_timer: float = 0.0
+var ebolt_effect_timer: float = 0.0
+var revcon_timer: float = 0.0
+var special_timer: float = 0.0
+var weapon_fire_cooldown: float = 0.0
 
 func _ready() -> void:
 	add_to_group(&"ships")
@@ -919,3 +929,59 @@ func _get_axis(positive: Key, negative: Key) -> float:
 
 func _wants_reset() -> bool:
 	return is_player_controlled and Input.is_action_pressed(&"ship_reset")
+
+
+# ==================== WEAPON METHODS ====================
+
+func fire_weapon(wtype: WipeoutWeapon.WeaponType, target: WipeoutShip = null) -> void:
+	"""Fire a weapon from this ship"""
+	if weapon_fire_cooldown > 0.0:
+		return
+
+	weapon_type = wtype
+	weapon_target = target
+
+	var weapon_manager = get_tree().root.get_child(0).get_node_or_null("WeaponManager")
+	if weapon_manager:
+		weapon_manager.fire_weapon(self, wtype, target)
+
+	weapon_fire_cooldown = WipeoutWeapon.WEAPON_DELAY
+	weapon_type = WipeoutWeapon.WeaponType.NONE
+
+
+func fire_weapon_delayed(wtype: WipeoutWeapon.WeaponType, target: WipeoutShip = null) -> void:
+	"""Fire a weapon with a delay (for AI)"""
+	var weapon_manager = get_tree().root.get_child(0).get_node_or_null("WeaponManager")
+	if weapon_manager:
+		weapon_manager.fire_weapon_delayed(self, wtype, target)
+
+
+func has_shield() -> bool:
+	"""Check if this ship currently has a shield active"""
+	return shield_active
+
+
+func apply_shield() -> void:
+	"""Apply a shield to this ship"""
+	shield_active = true
+	shield_timer = WipeoutWeapon.SHIELD_DURATION
+
+
+func remove_shield() -> void:
+	"""Remove the shield from this ship"""
+	shield_active = false
+	shield_timer = 0.0
+
+
+func apply_electro_effect(duration: float) -> void:
+	"""Apply electric effect that disables controls"""
+	ebolt_timer = duration
+	ebolt_effect_timer = duration
+
+
+func get_random_weapon(weapon_class: int = 1) -> WipeoutWeapon.WeaponType:
+	"""Get a random weapon type"""
+	var weapon_manager = get_tree().root.get_child(0).get_node_or_null("WeaponManager")
+	if weapon_manager:
+		return weapon_manager.get_random_weapon(weapon_class)
+	return WipeoutWeapon.WeaponType.ROCKET

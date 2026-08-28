@@ -7,6 +7,11 @@ const RaceFieldScript = preload("res://scripts/race_field.gd")
 
 
 func _ready() -> void:
+	# Initialize weapon manager
+	var weapon_manager = WipeoutWeaponManager.new()
+	weapon_manager.name = "WeaponManager"
+	add_child(weapon_manager)
+
 	var track_scene: PackedScene = default_track_scene
 	if TrackSelection.selected_track_scene != null:
 		track_scene = TrackSelection.selected_track_scene

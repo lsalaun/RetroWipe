@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell($g = \"C:\\\\Users\\\\loik_\\\\Downloads\\\\Godot_v4.6.1-stable_win64.exe\\\\Godot_v4.6.1-stable_win64_console.exe\"; & $g --headless --path \"d:\\\\code\\\\wipeout-rewrite\\\\godot\\\\src\" -s \"res://tools/validate_race_logic.gd\" 2>&1 | Select-Object -First 45)"
+      "PowerShell($g = \"C:\\\\Users\\\\loik_\\\\Downloads\\\\Godot_v4.6.1-stable_win64.exe\\\\Godot_v4.6.1-stable_win64_console.exe\"; & $g --headless --path \"d:\\\\code\\\\wipeout-rewrite\\\\godot\\\\src\" -s \"res://tools/validate_race_logic.gd\" 2>&1 | Select-Object -First 45)",
+      "Read(//d/code/wipeout-rewrite/**)"
     ]
   }
 }

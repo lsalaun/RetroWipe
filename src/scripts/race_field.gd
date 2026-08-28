@@ -73,12 +73,12 @@ static func ai_settings_for(race_class: int, inv_start_rank: int) -> Dictionary:
 
 static func track_display_name() -> String:
 	if TrackSelection.selected_track_scene == null:
-		return "KORODERA"
+		return "TERRAMAX"
 	var path := TrackSelection.selected_track_scene.resource_path
 	for track in TrackSelection.TRACKS:
 		if track["scene"] == path:
 			return str(track.get("circuit", track["name"]))
-	return "KORODERA"
+	return "TERRAMAX"
 
 
 static func build_start_order(player_pilot: String) -> Array[Dictionary]:

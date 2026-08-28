@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" path="res://scenes/PauseMenu.tscn" id="8_pause_menu"]
 [ext_resource type="Script" path="res://scripts/race_field.gd" id="9_race_field"]
 [ext_resource type="PackedScene" path="res://scenes/RaceHud.tscn" id="10_race_hud"]
+[ext_resource type="Script" path="res://scripts/race_director.gd" id="11_race_director"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.0862745, 0.129412, 0.239216, 1)
@@ -40,6 +41,9 @@ script = ExtResource("5_ship_collision_manager")
 
 [node name="RaceField" type="Node" parent="."]
 script = ExtResource("9_race_field")
+
+[node name="RaceDirector" type="Node" parent="."]
+script = ExtResource("11_race_director")
 
 [node name="PauseMenu" parent="." instance=ExtResource("8_pause_menu")]
 

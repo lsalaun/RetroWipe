@@ -122,11 +122,20 @@ func _check_portraits() -> bool:
 
 
 func _check_hud() -> bool:
-	var facia := _hud.get_node_or_null("Speedo/Facia") as TextureRect
+	# The speedo hangs off the text HUD so race_hud.gd can hide both together
+	# when the ship loses SHIP_RACING (see race.c's hud_draw() gate).
+	var facia := _hud.get_node_or_null("Hud/Speedo/Facia") as TextureRect
 	if facia == null or facia.texture == null:
 		push_error("validate_ui_art: speedo facia empty")
 		return false
 	if facia.texture.resource_path != SPEEDO:
 		push_error("validate_ui_art: speedo %s" % facia.texture.resource_path)
 		return false
+	if _hud.get_node_or_null("Results") == null:
+		push_error("validate_ui_art: RaceHud missing Results")
+		return false
+	for path in WipeoutUI.ATLAS_PATHS:
+		if not ResourceLoader.exists(path):
+			push_error("validate_ui_art: missing font atlas %s" % path)
+			return false
 	return true

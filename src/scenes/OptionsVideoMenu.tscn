@@ -57,6 +57,20 @@ layout_mode = 2
 toggle_mode = true
 text = "ON"
 
+[node name="ShowFpsRow" type="HBoxContainer" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Label" type="Label" parent="CenterContainer/VBoxContainer/ShowFpsRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(160, 0)
+text = "SHOW FPS"
+
+[node name="ShowFpsButton" type="Button" parent="CenterContainer/VBoxContainer/ShowFpsRow"]
+layout_mode = 2
+toggle_mode = true
+text = "OFF"
+
 [node name="BackButton" type="Button" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
 text = "BACK"

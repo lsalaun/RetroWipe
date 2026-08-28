@@ -3,7 +3,10 @@ extends SceneTree
 ## Headless check that the race field spawns 7 DPA opponents plus the player
 ## and that they start following the center line without wall ping-pong.
 
-const WAIT_FRAMES := 180
+## RaceDirector gates the whole grid for ship.h's UPDATE_TIME_INITIAL (200/30 s,
+## ~400 physics frames at 60 Hz) before GO, so the motion check has to sit well
+## past the countdown.
+const WAIT_FRAMES := 600
 const MAX_AI_LATERAL := 7.5
 const MAX_AI_WALL_HITS := 8
 

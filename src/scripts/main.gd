@@ -18,6 +18,7 @@ func _ready() -> void:
 
 	var center_line := track.get_node_or_null("CenterLine") as Path3D
 	var spawn := track.get_node_or_null("ShipSpawn") as Marker3D
+	var start_line_offset := _start_line_offset(center_line, track_scene)
 
 	_clear_placeholder_ai()
 	var player := _find_player_ship()
@@ -26,6 +27,7 @@ func _ready() -> void:
 
 	if RaceSetup.race_type == RaceSetup.RACE_TYPE_TIME_TRIAL:
 		player.center_line = center_line
+		player.start_line_offset = start_line_offset
 		RaceFieldScript.place_ship(player, spawn, RaceFieldScript.NUM_PILOTS - 1)
 		if ShipSelection.selected_ship_scene != null:
 			player.set_ship_model(ShipSelection.selected_ship_scene)
@@ -52,6 +54,7 @@ func _ready() -> void:
 			if ship == null:
 				continue
 		ship.center_line = center_line
+		ship.start_line_offset = start_line_offset
 		RaceFieldScript.place_ship(ship, spawn, i)
 		var mesh_path := str(entry.get("mesh", ""))
 		if mesh_path != "":
@@ -62,6 +65,20 @@ func _ready() -> void:
 		if ship is WipeoutShipAI:
 			var settings := RaceFieldScript.ai_settings_for(RaceSetup.race_class, inv_rank)
 			(ship as WipeoutShipAI).configure_from_race(settings, circuit, inv_rank)
+
+
+## Distance along the centerline of the start/finish line. game.c stores it as a
+## TRACK.TRS section index (circuit_settings_t.start_line_pos) and the exported
+## curve has one point per section, so the line is curve point `start_line`.
+## ShipSpawn sits 15 sections earlier, which is why this can't just be the
+## spawn's own offset.
+func _start_line_offset(center_line: Path3D, track_scene: PackedScene) -> float:
+	if center_line == null or center_line.curve == null or center_line.curve.point_count < 2:
+		return 0.0
+	var curve := center_line.curve
+	var section := TrackSelection.start_line_section_for(track_scene.resource_path)
+	var index := posmod(section, curve.point_count)
+	return curve.get_closest_offset(curve.get_point_position(index))
 
 
 func _clear_placeholder_ai() -> void:

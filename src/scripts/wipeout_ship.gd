@@ -2,6 +2,12 @@ extends Node3D
 
 class_name WipeoutShip
 
+## Emitted on every *first* forward crossing of the start/finish line that
+## completes a timed lap, mirroring ship.c's `g.lap_times[pilot][lap-1] = ...`
+## bookkeeping. `lap_index` is 0-based; RaceDirector turns this into the HUD's
+## lap list and into race_end().
+signal lap_completed(ship: WipeoutShip, lap_index: int, time: float)
+
 
 class HoverSample:
 	var grounded: bool = false
@@ -9,6 +15,18 @@ class HoverSample:
 	var compression: float = 0.0
 	var height: float = 0.0
 	var nose_height: float = 0.0
+
+
+## Substituted for _gather_inputs() while race_control_enabled is false, so a
+## gated ship still hovers and settles onto the grid but neither thrusts nor
+## steers -- the Godot stand-in for the original's separate intro update_func.
+const NEUTRAL_INPUTS := {
+	"throttle": 0.0,
+	"steer": 0.0,
+	"pitch": 0.0,
+	"brake_left": false,
+	"brake_right": false,
+}
 
 # Wipeout-like defaults: strong track magnet, tight grip, quick yaw response,
 # with a grounded hover behavior that keeps the ship glued to the track instead of
@@ -119,13 +137,21 @@ var grounded_grace_timer: float = 0.0
 var spawn_transform: Transform3D
 var velocity: Vector3 = Vector3.ZERO
 var camera_velocity: Vector3 = Vector3.ZERO # spring state, ported from camera_t.velocity
-var race_progress: float = 0.0 # lap * curve_length + offset; analog of ship_t.total_section_num
-var lap: int = 0
+var race_progress: float = 0.0 # lap * curve_length + distance from the start line; analog of ship_t.total_section_num
+var lap: int = -1 # ported from ship_init(): -1 until the line is crossed for the first time, so the HUD shows LAP 1 only once the race is actually under way
+var max_lap: int = -1 # ported from ship_t.max_lap: highest lap reached, so re-crossing the line backwards then forwards does not re-time a lap
+var lap_time: float = 0.0 # ported from ship_t.lap_time: reset on every first crossing of the line
+var lap_times: Array[float] = [] # this ship's slice of g.lap_times[pilot], one entry per completed timed lap
+var start_line_offset: float = 0.0 # center_line offset of the start/finish line, set by main.gd from the track's start_line_pos (game.c def.circuits); ShipSpawn itself sits 15 sections *behind* it
+var direction_forward: bool = true # ported from SHIP_DIRECTION_FORWARD, drives the HUD's WRONG WAY warning
+var is_racing: bool = true # ported from SHIP_RACING: cleared by race_release_control() once the player has finished, which also hides the HUD
+var race_control_enabled: bool = true # false while the start countdown runs (ship_player_update_intro / ship_ai_update_intro) and after the finish: inputs are forced neutral, physics keep running
 var on_left_side: bool = false
 var just_in_front: bool = false
 var position_rank: int = 8
 var wall_hit_count: int = 0
 var _last_curve_offset: float = -1.0
+var _last_line_distance: float = 0.0 # signed distance to the start line on the previous frame, in curve meters; the sign flip is the crossing test
 var _track_right_dir: Vector3 = Vector3.RIGHT # across-lane axis from the nearest center-line tangent and racing-surface normal
 var _track_floor_normal: Vector3 = Vector3.UP # racing-surface normal under the center line; steep floors stay aligned with this, edge shelves do not
 var _track_center_point: Vector3 = Vector3.ZERO # nearest racing-line sample; void checks drop against this Y, not the last crest
@@ -219,11 +245,17 @@ func respawn_at(new_transform: Transform3D) -> void:
 	desired_forward = -new_transform.basis.z
 	last_ground_normal = Vector3.UP
 	last_ground_height = global_position.y
+	_last_curve_offset = -1.0
 	_snap_camera_to_ship()
 
 
 func _physics_process(delta: float) -> void:
 	_refresh_track_axes()
+	# ship.c accumulates lap_time unconditionally in ship_update(), before the
+	# crossing test resets it -- so the countdown seconds land in a lap the HUD
+	# never shows (lap < 0) and the first timed lap still starts at zero.
+	if is_racing:
+		lap_time += delta
 	_update_race_progress()
 	if _wants_reset():
 		_reset_to_spawn()
@@ -232,7 +264,7 @@ func _physics_process(delta: float) -> void:
 		_rescue_to_track()
 		return
 
-	var inputs := _gather_inputs()
+	var inputs := _gather_inputs() if race_control_enabled else NEUTRAL_INPUTS
 	var throttle: float = inputs.throttle
 	var steer: float = inputs.steer
 	var pitch_input: float = inputs.pitch
@@ -766,6 +798,11 @@ func _rescue_to_track() -> void:
 	last_ground_height = target_position.y
 
 
+## Lap counting, race progress and heading check, ported from the tail of
+## ship_update(). The original works in TRACK.TRS section indices around
+## `start_line_pos`; here the equivalent measure is the distance along
+## center_line from start_line_offset, which is exact rather than quantised to
+## a section and behaves the same for the ranking comparison.
 func _update_race_progress() -> void:
 	if center_line == null or center_line.curve == null or center_line.curve.point_count < 2:
 		return
@@ -774,13 +811,34 @@ func _update_race_progress() -> void:
 	var curve_length := maxf(curve.get_baked_length(), 0.001)
 	var local_pos := center_line.to_local(global_position)
 	var offset := curve.get_closest_offset(local_pos)
+
+	# Distance travelled since the line, always in [0, curve_length) -- the
+	# continuous analog of ship.c's `section_num_from_line`.
+	var from_line := fposmod(offset - start_line_offset, curve_length)
+	# ...and the same measure signed around the line, so "just before" reads
+	# negative and "just after" positive.
+	var line_distance := from_line if from_line <= curve_length * 0.5 else from_line - curve_length
+
 	if _last_curve_offset >= 0.0:
-		if _last_curve_offset > curve_length * 0.75 and offset < curve_length * 0.25:
-			lap += 1
-		elif _last_curve_offset < curve_length * 0.25 and offset > curve_length * 0.75:
+		# Per-frame step along the curve, unwrapped across offset 0 (which is an
+		# arbitrary point on the track, unrelated to the start line).
+		var step := offset - _last_curve_offset
+		if step > curve_length * 0.5:
+			step -= curve_length
+		elif step < -curve_length * 0.5:
+			step += curve_length
+		# Ported from ship.c's prev_section_num/section_num test around
+		# start_line_pos: a forward step over the line adds a lap, a backward
+		# step over it takes it away again. Requiring the step's sign to agree
+		# with the sign flip keeps the wrap at the far side of the track (where
+		# line_distance jumps between +/- curve_length/2) from counting.
+		if step > 0.0 and _last_line_distance < 0.0 and line_distance >= 0.0:
+			_cross_start_line()
+		elif step < 0.0 and line_distance < 0.0 and _last_line_distance >= 0.0:
 			lap -= 1
 	_last_curve_offset = offset
-	race_progress = float(lap) * curve_length + offset
+	_last_line_distance = line_distance
+	race_progress = float(lap) * curve_length + from_line
 
 	var closest_local := curve.sample_baked(offset, true)
 	var ahead_local := curve.sample_baked(offset + 0.5, true)
@@ -788,10 +846,52 @@ func _update_race_progress() -> void:
 	path_dir.y = 0.0
 	if path_dir.length_squared() < 0.0001:
 		return
-	var right := path_dir.normalized().cross(Vector3.UP)
+	path_dir = path_dir.normalized()
+	var right := path_dir.cross(Vector3.UP)
 	var lateral := global_position - center_line.to_global(closest_local)
 	lateral.y = 0.0
 	on_left_side = lateral.dot(right) < 0.0
+
+	# ported from ship_collide_with_track(): the ship is going the right way
+	# while its nose still points down-track.
+	var forward := -global_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() >= 0.0001:
+		direction_forward = forward.normalized().dot(path_dir) >= 0.0
+
+
+## Ported from ship.c's "crossed line forwards" branch: the lap advances every
+## time, but only a *new* highest lap banks a lap time.
+func _cross_start_line() -> void:
+	lap += 1
+	if lap <= max_lap:
+		return
+	max_lap = lap
+
+	var completed := lap_time
+	lap_time = 0.0
+	# lap 0 is the crossing that starts the first timed lap (ships spawn behind
+	# the line), so there is nothing to record for it.
+	if lap <= 0:
+		return
+	if lap > lap_times.size():
+		lap_times.resize(lap)
+	lap_times[lap - 1] = completed
+	lap_completed.emit(self, lap - 1, completed)
+
+
+## Called by RaceDirector before the countdown so a restarted race starts from
+## ship_init()'s race-control state without rebuilding the ship.
+func reset_race_state() -> void:
+	lap = -1
+	max_lap = -1
+	lap_time = 0.0
+	lap_times.clear()
+	race_progress = 0.0
+	direction_forward = true
+	is_racing = true
+	_last_curve_offset = -1.0
+	_last_line_distance = 0.0
 
 
 func _reset_dynamic_state() -> void:
@@ -808,6 +908,9 @@ func _reset_dynamic_state() -> void:
 	wall_impact_cooldown = 0.0
 	ship_impact_cooldown = 0.0
 	airborne_time = 0.0
+	# A rescue/reset teleports along the curve; forget the previous sample so the
+	# jump can't be mistaken for a start-line crossing.
+	_last_curve_offset = -1.0
 
 
 func _get_axis(positive: Key, negative: Key) -> float:

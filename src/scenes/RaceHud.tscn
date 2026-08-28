@@ -1,12 +1,24 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://scripts/hud_speedo.gd" id="1_script"]
-[ext_resource type="Texture2D" uid="uid://dk70ecrwxn3u" path="res://assets/ui/speedo.png" id="2_speedo"]
+[ext_resource type="Script" path="res://scripts/race_hud.gd" id="1_hud"]
+[ext_resource type="Script" path="res://scripts/hud_speedo.gd" id="2_speedo"]
+[ext_resource type="Texture2D" uid="uid://dk70ecrwxn3u" path="res://assets/ui/speedo.png" id="3_speedo_tex"]
+[ext_resource type="Script" path="res://scripts/race_results.gd" id="4_results"]
 
 [node name="RaceHud" type="CanvasLayer"]
 layer = 0
 
-[node name="Speedo" type="Control" parent="."]
+[node name="Hud" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_hud")
+
+[node name="Speedo" type="Control" parent="Hud"]
 layout_mode = 1
 anchors_preset = 3
 anchor_left = 1.0
@@ -20,9 +32,9 @@ offset_bottom = -36.0
 grow_horizontal = 0
 grow_vertical = 0
 mouse_filter = 2
-script = ExtResource("1_script")
+script = ExtResource("2_speedo")
 
-[node name="Facia" type="TextureRect" parent="Speedo"]
+[node name="Facia" type="TextureRect" parent="Hud/Speedo"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -30,7 +42,40 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-texture = ExtResource("2_speedo")
+texture = ExtResource("3_speedo_tex")
 expand_mode = 1
 stretch_mode = 5
 texture_filter = 1
+
+[node name="Results" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("4_results")
+
+[node name="Buttons" type="VBoxContainer" parent="Results"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -110.0
+offset_top = -128.0
+offset_right = 110.0
+offset_bottom = -32.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 12
+
+[node name="RestartButton" type="Button" parent="Results/Buttons"]
+layout_mode = 2
+text = "RESTART RACE"
+
+[node name="QuitButton" type="Button" parent="Results/Buttons"]
+layout_mode = 2
+text = "QUIT TO MENU"

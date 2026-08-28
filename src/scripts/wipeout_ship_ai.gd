@@ -84,6 +84,13 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_ai_delta = delta
+	# ship_ai_update_intro_await_go() only bobs the ship on the grid: no DPA, and
+	# start_accelerate_timer must not burn down before GO or the whole staggered
+	# start collapses. The racing-line pull is skipped too, otherwise the two
+	# grid columns get dragged onto the centerline during the countdown.
+	if not race_control_enabled:
+		super._physics_process(delta)
+		return
 	_update_dpa(delta)
 	super._physics_process(delta)
 	_pull_to_racing_line(delta)

@@ -119,6 +119,12 @@ func _physics_process(_delta: float) -> void:
 
 func _update_ranks() -> void:
 	var ships: Array = get_tree().get_nodes_in_group(&"ships")
+	# ships_update() only re-ranks while the player still has SHIP_RACING, so
+	# the final standings stay frozen on the results screen.
+	for node in ships:
+		var ship := node as WipeoutShip
+		if ship != null and ship.is_player_controlled and not ship.is_racing:
+			return
 	ships.sort_custom(_compare_race_progress)
 	for i in ships.size():
 		var ship := ships[i] as WipeoutShip

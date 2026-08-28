@@ -86,8 +86,8 @@ func normalize_team_name(team: String) -> String:
 
 func team_for_pilot(pilot: String) -> String:
 	for team in TEAM_PILOTS:
-		for name in TEAM_PILOTS[team]:
-			if name == pilot:
+		for pilot_name in TEAM_PILOTS[team]:
+			if pilot_name == pilot:
 				return team
 	for ship in ShipSelection.SHIPS:
 		if str(ship.get("pilot", "")) == pilot:

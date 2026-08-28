@@ -15,6 +15,7 @@ func _ready() -> void:
 
 	volume_slider.value_changed.connect(_on_volume_changed)
 	back_button.pressed.connect(_on_back_pressed)
+	GameAudio.hook_menu(self)
 	volume_slider.grab_focus()
 
 

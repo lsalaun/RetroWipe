@@ -15,6 +15,7 @@ var advance_to_race: bool = true
 func _ready() -> void:
 	_apply_loading_art()
 	start_button.pressed.connect(_on_start_pressed)
+	GameAudio.hook_menu(self)
 	if advance_to_race:
 		start_button.grab_focus()
 	else:

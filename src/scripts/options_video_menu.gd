@@ -17,6 +17,7 @@ func _ready() -> void:
 	fullscreen_button.toggled.connect(_on_fullscreen_toggled)
 	vsync_button.toggled.connect(_on_vsync_toggled)
 	back_button.pressed.connect(_on_back_pressed)
+	GameAudio.hook_menu(self)
 	fullscreen_button.grab_focus()
 
 

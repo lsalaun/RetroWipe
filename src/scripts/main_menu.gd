@@ -14,6 +14,7 @@ func _ready() -> void:
 	options_button.pressed.connect(_on_options_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
 	quit_confirm.confirmed.connect(_on_quit_confirmed)
+	GameAudio.hook_menu(self)
 	start_button.grab_focus()
 
 

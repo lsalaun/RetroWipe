@@ -28,6 +28,7 @@ func _ready() -> void:
 	quit_button.pressed.connect(_on_quit_pressed)
 	quit_confirm.confirmed.connect(_on_quit_confirmed)
 	restart_confirm.confirmed.connect(_on_restart_confirmed)
+	GameAudio.hook_menu(self)
 
 
 func _input(event: InputEvent) -> void:
@@ -56,6 +57,7 @@ func _set_open(open: bool) -> void:
 func _pause() -> void:
 	_set_open(true)
 	get_tree().paused = true
+	GameAudio.prepare_focus()
 	continue_button.grab_focus()
 
 

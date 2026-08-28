@@ -15,6 +15,7 @@ func _ready() -> void:
 		button.pressed.connect(_on_circuit_selected.bind(track["scene"]))
 		circuit_list.add_child(button)
 	back_button.pressed.connect(_on_back_pressed)
+	GameAudio.hook_menu(self)
 	if circuit_list.get_child_count() > 0:
 		circuit_list.get_child(0).grab_focus()
 

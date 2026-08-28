@@ -42,6 +42,7 @@ func _populate() -> void:
 		pad_button.pressed.connect(_start_capture.bind(action, true))
 		grid.add_child(pad_button)
 
+	GameAudio.hook_menu(self)
 	if first_button:
 		first_button.grab_focus()
 

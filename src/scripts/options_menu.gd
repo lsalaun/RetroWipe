@@ -14,6 +14,7 @@ func _ready() -> void:
 	video_button.pressed.connect(_on_video_pressed)
 	audio_button.pressed.connect(_on_audio_pressed)
 	back_button.pressed.connect(_on_back_pressed)
+	GameAudio.hook_menu(self)
 	controls_button.grab_focus()
 
 

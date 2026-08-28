@@ -14,6 +14,7 @@ func _ready() -> void:
 		button.pressed.connect(_on_pilot_selected.bind(ship))
 		pilot_list.add_child(button)
 	back_button.pressed.connect(_on_back_pressed)
+	GameAudio.hook_menu(self)
 	if pilot_list.get_child_count() > 0:
 		pilot_list.get_child(0).grab_focus()
 

@@ -25,6 +25,7 @@ TrackSelection="*res://scripts/track_selection.gd"
 ShipSelection="*res://scripts/ship_selection.gd"
 RaceSetup="*res://scripts/race_setup.gd"
 Settings="*res://scripts/settings.gd"
+GameAudio="*res://scripts/game_audio.gd"
 
 [display]
 

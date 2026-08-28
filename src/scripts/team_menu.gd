@@ -13,6 +13,7 @@ func _ready() -> void:
 		button.pressed.connect(_on_team_selected.bind(team_name))
 		option_list.add_child(button)
 	back_button.pressed.connect(_on_back_pressed)
+	GameAudio.hook_menu(self)
 	option_list.get_child(0).grab_focus()
 
 

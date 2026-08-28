@@ -45,6 +45,14 @@ func _on_area_entered(area: Area3D) -> void:
 	var ship := area.get_parent() as WipeoutShip
 	if ship == null:
 		return
+	# The AI never fires (see _update_weapons in wipeout_ship.gd: the trigger is
+	# gated on is_player_controlled), and its DPA reads weapon_type as "do I have
+	# something to shoot" -- an armed AI slot would therefore only lock the ship
+	# out of ship_ai.c's empty-slot behaviour and, because a full slot refuses
+	# every later pad, park the pad's cooldown on a weapon that is never used.
+	if not ship.is_player_controlled:
+		return
+
 	# The original only arms a ship whose slot is empty; a held weapon is never
 	# overwritten by driving over another pad.
 	if ship.weapon_type != WipeoutWeapon.WeaponType.NONE:

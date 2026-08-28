@@ -14,10 +14,13 @@ const UPDATE_TIME_JUST_FRONT := 150.0 / 30.0
 const UPDATE_TIME_JUST_BEHIND := 200.0 / 30.0
 const UPDATE_TIME_IN_SIGHT := 200.0 / 30.0
 const NUM_PILOTS := 8
-## Godot stand-in for one TRACK.TRS section. DPA thresholds in ship_ai.c are in
-## section counts; converting them through curve.point_count is unstable across
-## TRS vs Blender-sampled paths, so a fixed meter length is used instead.
-const SECTION_LENGTH := 8.0
+## One TRACK.TRS section, in meters. Every DPA threshold in ship_ai.c is a
+## section count, and the exported center line carries one point per TRS
+## section (see main.gd's _start_line_offset), so the conversion is just
+## baked_length / point_count: ~14.4 m on Karbonis, ~17.3 m on Terramax. The
+## previous fixed 8.0 fired every threshold at roughly half the intended
+## distance. The fallback only applies before the curve is built from its JSON.
+const SECTION_LENGTH_FALLBACK := 15.0
 const SPEED_SCALE := 46.0 / 2600.0
 
 const STRAT_HOLD_CENTER := &"hold_center"
@@ -52,6 +55,9 @@ var overtaken_bonus: float = 700.0 * SPEED_SCALE
 var inv_start_rank: int = 1
 var current_lane: float = 0.0
 var _ai_delta: float = 1.0 / 60.0
+var _section_length: float = SECTION_LENGTH_FALLBACK
+var _section_length_curve: Curve3D = null
+var _section_length_points: int = 0
 
 
 func configure_from_race(settings: Dictionary, circuit: Dictionary, start_rank_inv: int) -> void:
@@ -230,6 +236,25 @@ func _lane_offset_for_strategy() -> float:
 			return 0.0
 
 
+## baked_length / point_count, cached. The Curve3D is rebuilt from its JSON in
+## the CenterLine's _ready(), which can land after this ship's own _ready(), so
+## the cache is keyed on the curve *and* its point count rather than resolved
+## once at configure time.
+func _section_length_meters() -> float:
+	var curve: Curve3D = center_line.curve if center_line != null else null
+	if curve == null:
+		return SECTION_LENGTH_FALLBACK
+	if curve != _section_length_curve or curve.point_count != _section_length_points:
+		_section_length_curve = curve
+		_section_length_points = curve.point_count
+		var length := curve.get_baked_length()
+		if curve.point_count > 0 and length > 0.0:
+			_section_length = length / float(curve.point_count)
+		else:
+			_section_length = SECTION_LENGTH_FALLBACK
+	return _section_length
+
+
 func _avoid_other_lane() -> float:
 	var avoid: WipeoutShip = null
 	var best_diff := 100.0
@@ -237,7 +262,7 @@ func _avoid_other_lane() -> float:
 		var other := node as WipeoutShip
 		if other == null or other == self:
 			continue
-		var diff := (other.race_progress - race_progress) / SECTION_LENGTH
+		var diff := (other.race_progress - race_progress) / _section_length_meters()
 		if diff < best_diff:
 			best_diff = diff
 			avoid = other
@@ -279,7 +304,7 @@ func _update_dpa(delta: float) -> void:
 	var player := _find_player()
 	var section_diff := 0.0
 	if player != null:
-		section_diff = (race_progress - player.race_progress) / SECTION_LENGTH
+		section_diff = (race_progress - player.race_progress) / _section_length_meters()
 
 	if start_accelerate_timer > 0.0:
 		start_accelerate_timer -= delta
@@ -310,7 +335,18 @@ func _update_dpa(delta: float) -> void:
 		if update_timer <= 0.0:
 			update_timer = UPDATE_TIME_JUST_BEHIND
 			if fight_back:
-				if randi_range(0, 63) < 48:
+				# ship_ai.c splits this decision on the weapon slot: with an
+				# empty slot the ship always falls back to avoid + SHIP_OVERTAKEN
+				# (the catch-up boost applied at the bottom of this branch), and
+				# only rolls block vs. avoid-and-fire once it has something to
+				# shoot. AI weapons are not part of this port and pads no longer
+				# arm AI slots, so the empty-slot branch is the faithful one --
+				# without it `overtaken` never became true and both the +700
+				# speed bonus and the whole catch-up mechanic were dead code.
+				if weapon_type == WipeoutWeapon.WeaponType.NONE:
+					strategy = STRAT_AVOID
+					overtaken = true
+				elif randi_range(0, 63) < 48:
 					strategy = STRAT_BLOCK
 				else:
 					strategy = STRAT_AVOID

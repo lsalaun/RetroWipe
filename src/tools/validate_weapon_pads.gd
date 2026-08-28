@@ -120,6 +120,27 @@ func _run_checks() -> void:
 		if via_pads.size() == 1:
 			_failures.append("every pad handed out the same weapon: %s" % via_pads.keys())
 
+	# 5b. The shield bubble must stay see-through, or it hides the ship it is
+	# protecting (weapon_update_shield draws it at alpha 48/255).
+	player.weapon_type = WipeoutWeapon.WeaponType.SHIELD
+	player.weapon_fire_cooldown = 0.0
+	player.fire_held_weapon()
+	var shield: WipeoutWeapon = null
+	for w in manager.weapons:
+		if w.weapon_type == WipeoutWeapon.WeaponType.SHIELD:
+			shield = w
+			break
+	if shield == null:
+		_failures.append("firing a shield spawned no shield weapon")
+	elif shield._shield_material == null:
+		_failures.append("shield has no translucent material applied")
+	else:
+		var alpha := shield._shield_material.albedo_color.a
+		print("  shield alpha=%.2f transparency=%d" % [alpha, shield._shield_material.transparency])
+		if shield._shield_material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED or alpha >= 0.9:
+			_failures.append("shield material is opaque (alpha %.2f)" % alpha)
+	player.remove_shield()
+
 	# 6. Firing spends the slot and puts a weapon in the scene.
 	player.weapon_type = WipeoutWeapon.WeaponType.ROCKET
 	player.weapon_fire_cooldown = 0.0

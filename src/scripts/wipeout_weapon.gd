@@ -45,6 +45,8 @@ const SHIP_COLLISION_RADIUS = 4.8
 const PROJECTILE_SPEED = 190.0
 ## How fast a homing weapon swings onto its target, rad/s.
 const HOMING_TURN_RATE = 2.4
+## weapon_update_shield()'s `const uint8_t shield_alpha = 48`, as a 0..1 alpha.
+const SHIELD_ALPHA = 48.0 / 255.0
 
 const WEAPON_MODELS = {
 	WeaponType.ROCKET: "res://assets/weapons/rocket.glb",
@@ -69,6 +71,7 @@ var active: bool = false
 var model: Node3D
 var release_timer: float = 0.0
 var is_waiting_for_release: bool = false
+var _shield_material: StandardMaterial3D = null
 
 
 func _ready() -> void:
@@ -101,6 +104,7 @@ func _physics_process(delta: float) -> void:
 				return
 			global_position = owner_ship.global_position
 			global_rotation = owner_ship.global_rotation
+			_animate_shield()
 			return # a shield never collides with anything
 		WeaponType.MINE:
 			rotation.y += delta * 2.0 # "self->angle.y += system_tick()"
@@ -141,6 +145,10 @@ func fire(ship: WipeoutShip, wtype: WeaponType, target: WipeoutShip = null) -> v
 			_load_model(wtype)
 		WeaponType.SHIELD:
 			timer = SHIELD_DURATION
+			# The bubble copies the ship's transform each frame, so it has to run
+			# *after* the ship has moved -- otherwise it trails a frame behind,
+			# which at racing speed leaves it visibly off to one side.
+			process_physics_priority = 100
 			_load_model(wtype)
 			ship.apply_shield()
 		WeaponType.TURBO:
@@ -237,6 +245,50 @@ func _load_model(wtype: WeaponType) -> void:
 	# A mine stays invisible until it is actually released.
 	if wtype == WeaponType.MINE:
 		model.visible = false
+	elif wtype == WeaponType.SHIELD:
+		_apply_shield_material()
+
+
+## weapon_update_shield() rewrites the bubble's vertex colours every frame to
+## rgba(col, col, 255, 48) -- a translucent blue that pulses. Per-vertex colours
+## would need a custom shader here, so a single translucent material carries the
+## same look while keeping the ship readable through it.
+func _apply_shield_material() -> void:
+	_shield_material = StandardMaterial3D.new()
+	_shield_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_shield_material.albedo_color = Color(0.55, 0.55, 1.0, SHIELD_ALPHA)
+	_shield_material.emission_enabled = true
+	_shield_material.emission = Color(0.45, 0.6, 1.0)
+	_shield_material.emission_energy_multiplier = 0.7
+	# The source keeps a second copy of the mesh with its polys swapped
+	# (shield_internal) so the bubble is solid from inside the cockpit too;
+	# drawing both faces covers both views from one mesh.
+	_shield_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_shield_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	# A translucent bubble casting a hard shadow reads as a solid ball.
+	_for_each_mesh(model, func(mesh_instance: MeshInstance3D) -> void:
+		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for surface in mesh_instance.get_surface_override_material_count():
+			mesh_instance.set_surface_override_material(surface, _shield_material)
+	)
+
+
+## Pulses the tint between blue and white, standing in for the per-vertex
+## `sinf(color_timer * coords[v])` sweep in weapon_update_shield().
+func _animate_shield() -> void:
+	if _shield_material == null:
+		return
+	var pulse := sin(timer * 6.0) * 0.5 + 0.5
+	_shield_material.albedo_color = Color(
+		0.45 + 0.4 * pulse, 0.5 + 0.35 * pulse, 1.0, SHIELD_ALPHA
+	)
+
+
+func _for_each_mesh(node: Node, action: Callable) -> void:
+	if node is MeshInstance3D:
+		action.call(node)
+	for child in node.get_children():
+		_for_each_mesh(child, action)
 
 
 func _deactivate() -> void:

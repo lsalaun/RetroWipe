@@ -5,8 +5,11 @@ extends Control
 const FACIA := "res://assets/ui/speedo.png"
 const SKEW := 2.0
 const LOGICAL_W := 128.0
+const LOGICAL_H := 32.0
 const SPEED_FULL := 90.0
 const THRUST_COLOR := Color(1.0, 0.0, 0.0, 0.5)
+## hud.c: facia at (-141,-45), bars at (-141,-40) — same X, bars 5px lower.
+const BAR_ORIGIN := Vector2(0.0, 5.0)
 
 const BARS: Array[Dictionary] = [
 	{"x": 6.0, "y": 12.0, "h": 10.0, "c": Color(66.0 / 255.0, 16.0 / 255.0, 49.0 / 255.0)},
@@ -91,7 +94,8 @@ func _draw_speedo_bars(fill: float, override_col: Color) -> void:
 
 func _draw_speedo_bar(a: Dictionary, b: Dictionary, f: float, override_col: Color) -> void:
 	var sx := size.x / LOGICAL_W
-	var sy := size.y / 32.0
+	var sy := size.y / LOGICAL_H
+	var origin := Vector2(BAR_ORIGIN.x * sx, BAR_ORIGIN.y * sy)
 	var left_color: Color = override_col if override_col.a > 0.0 else a["c"]
 	var right_color: Color = override_col
 	if override_col.a <= 0.0:
@@ -105,9 +109,9 @@ func _draw_speedo_bar(a: Dictionary, b: Dictionary, f: float, override_col: Colo
 	var ay := float(a["y"])
 	var bx := float(b["x"])
 	var by := float(b["y"])
-	var top_left := Vector2((ax + 1.0) * sx, ay * sy)
-	var bottom_left := Vector2((ax + 1.0 - ah / SKEW) * sx, (ay + ah) * sy)
-	var top_right := Vector2(lerpf(ax + 1.0, bx, f) * sx, lerpf(ay, by, f) * sy)
+	var top_left := Vector2((ax + 1.0) * sx, ay * sy) + origin
+	var bottom_left := Vector2((ax + 1.0 - ah / SKEW) * sx, (ay + ah) * sy) + origin
+	var top_right := Vector2(lerpf(ax + 1.0, bx, f) * sx, lerpf(ay, by, f) * sy) + origin
 	var bottom_right := Vector2(top_right.x - right_h / SKEW * sx, top_right.y + right_h * sy)
 	var z := Vector2.ZERO
 	draw_primitive(

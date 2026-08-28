@@ -16,8 +16,13 @@ Les chemins ci-dessous sont relatifs à la racine du dépôt `wipeout-rewrite`, 
 
 Les parsers et ré-exports vivent dans `godot/tools/`, pas dans `godot/src/tools/`.
 
+L'enchaînement manuel des étapes §4 peut être remplacé par `import_track.py` : voir [workflow_import_track_orchestrator.md](workflow_import_track_orchestrator.md). Les autres dumps `wipeout/` (vaisseaux, UI, audio, COMMON) : [workflow_assets_overview.md](workflow_assets_overview.md).
+
 | Outil | Rôle |
 | --- | --- |
+| `godot/tools/psx_track/import_track.py` | Orchestrateur pipeline A (géométrie + courbe + flags + décor + ciel + GLB + copie + `ShipSpawn`) |
+| `godot/tools/psx_track/circuit_catalog.py` | `TRACKNN` → nom in-game / `start_line_pos` (`game.c`) |
+| `godot/tools/psx_track/compute_ship_spawn.py` | Littéral `Transform3D` yaw-only à `start_line_pos - 15` |
 | `godot/tools/psx_track/convert_track_geometry.py` | `TRACK.TRV` + `TRACK.TRF` (+ `LIBRARY.CMP`/`LIBRARY.TTF`) → mesh texturé `.gltf`/`.obj` |
 | `godot/tools/psx_track/convert_track_sections.py` | `TRACK.TRS` → JSON de ligne centrale IA |
 | `godot/tools/psx_track/convert_track_face_flags.py` | flags de faces (`pickup` / `boost` / `start_grid`) → JSON |
@@ -85,7 +90,7 @@ Tous les convertisseurs Python partagent les mêmes options. **Les passer à l'i
 
 ## 4. Pipeline A — import PSX « (Track01 / Track02)
 
-C'est le workflow à suivre pour un nouveau `TRACKNN` « complet » (mesh + ligne + flags + décor + ciel).
+C'est le workflow à suivre pour un nouveau `TRACKNN` « complet » (mesh + ligne + flags + décor + ciel). Pour enchaîner ces étapes sans les retaper : [workflow_import_track_orchestrator.md](workflow_import_track_orchestrator.md) (`py godot/tools/psx_track/import_track.py TRACKNN`).
 
 Préparer un dossier de travail, par exemple `_converted_tracks/track_NN/`.
 

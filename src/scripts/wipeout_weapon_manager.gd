@@ -2,8 +2,10 @@ extends Node
 
 class_name WipeoutWeaponManager
 
-## Singleton manager for all active weapons in the race
-## Handles weapon spawning, updates, and weapon type selection
+## Autoloaded singleton (`WeaponManager`) owning every live weapon, ported from
+## weapon.c's flat `weapons[WEAPONS_MAX]` array plus `weapons_fire()` /
+## `weapons_update()`. Because it is an autoload it survives scene changes, so
+## `clear_all_weapons()` stands in for `weapons_init()` at the start of a race.
 
 signal weapon_fired(ship: WipeoutShip, weapon_type: WipeoutWeapon.WeaponType)
 
@@ -11,137 +13,143 @@ const MAX_WEAPONS = 64
 const WEAPON_CLASS_ANY = 1
 const WEAPON_CLASS_PROJECTILE = 2
 
-# Weapon probability tables for random drops
-const WEAPON_PROBABILITIES_ANY = {
-	WipeoutWeapon.WeaponType.ROCKET: 0.26,      # 17/65
-	WipeoutWeapon.WeaponType.MINE: 0.28,        # 18/65
-	WipeoutWeapon.WeaponType.SHIELD: 0.15,      # 10/65
-	WipeoutWeapon.WeaponType.MISSILE: 0.12,     # 8/65
-	WipeoutWeapon.WeaponType.TURBO: 0.09,       # 6/65
-	WipeoutWeapon.WeaponType.EBOLT: 0.10,       # 6/65
-}
+## Cumulative weights straight from weapon_get_random_type()'s `rand_int(0, 65)`
+## ladder, kept as raw slice widths so the table reads like the C source.
+const WEAPON_WEIGHTS_ANY = [
+	[WipeoutWeapon.WeaponType.ROCKET, 17],
+	[WipeoutWeapon.WeaponType.MINE, 18],
+	[WipeoutWeapon.WeaponType.SHIELD, 10],
+	[WipeoutWeapon.WeaponType.MISSILE, 8],
+	[WipeoutWeapon.WeaponType.TURBO, 6],
+	[WipeoutWeapon.WeaponType.EBOLT, 6],
+]
 
-const WEAPON_PROBABILITIES_PROJECTILE = {
-	WipeoutWeapon.WeaponType.ROCKET: 0.45,      # 27/60
-	WipeoutWeapon.WeaponType.MISSILE: 0.22,     # 13/60
-	WipeoutWeapon.WeaponType.TURBO: 0.17,       # 10/60
-	WipeoutWeapon.WeaponType.EBOLT: 0.16,       # 10/60
-}
+## The `rand_int(0, 60)` ladder from the same function.
+const WEAPON_WEIGHTS_PROJECTILE = [
+	[WipeoutWeapon.WeaponType.ROCKET, 27],
+	[WipeoutWeapon.WeaponType.MISSILE, 13],
+	[WipeoutWeapon.WeaponType.TURBO, 10],
+	[WipeoutWeapon.WeaponType.EBOLT, 10],
+]
 
 var weapons: Array[WipeoutWeapon] = []
 var weapon_scene: PackedScene
-var ship_weapons: Dictionary = {}  # Maps ship node to their current weapon
-var weapon_fire_delays: Dictionary = {}  # For delayed weapon firing
+
+static var _fallback: WipeoutWeaponManager = null
+
+
+## Resolves the `WeaponManager` autoload *without* naming it as a global
+## identifier. The `validate_*.gd` tools run under `--script`, which boots a bare
+## SceneTree with no autoloads registered, and a direct `WeaponManager.…`
+## reference fails to **compile** there -- taking every validator down with it,
+## not just the weapon ones. Looking the node up by path keeps those runs
+## compiling, and the fallback keeps them exercising the weapon path.
+static func instance(tree: SceneTree) -> WipeoutWeaponManager:
+	if tree == null:
+		return null
+	var node := tree.root.get_node_or_null(^"WeaponManager")
+	if node is WipeoutWeaponManager:
+		return node
+	if _fallback != null and is_instance_valid(_fallback):
+		return _fallback
+	_fallback = WipeoutWeaponManager.new()
+	_fallback.name = "WeaponManager"
+	tree.root.add_child(_fallback)
+	return _fallback
 
 
 func _ready() -> void:
-	set_process(true)
-
-	# Load the weapon scene
-	weapon_scene = load("res://scenes/wipeout_weapon.tscn")
+	weapon_scene = load("res://scenes/wipeout_weapon.tscn") as PackedScene
 
 
 func _process(_delta: float) -> void:
-	# Update weapon fire delays
-	var keys_to_remove = []
-	for ship in weapon_fire_delays:
-		weapon_fire_delays[ship] -= _delta
-		if weapon_fire_delays[ship] <= 0:
-			keys_to_remove.append(ship)
-
-	for ship in keys_to_remove:
-		weapon_fire_delays.erase(ship)
+	# weapons_update() compacts its array by swapping the last entry over any
+	# released weapon; here the weapon frees itself, so we just drop the stale
+	# references it leaves behind.
+	var live: Array[WipeoutWeapon] = []
+	for weapon in weapons:
+		if is_instance_valid(weapon) and weapon.active:
+			live.append(weapon)
+	weapons = live
 
 
 func fire_weapon(ship: WipeoutShip, weapon_type: WipeoutWeapon.WeaponType, target: WipeoutShip = null) -> WipeoutWeapon:
-	"""Fire a weapon from a ship"""
-	# Special case for mines: create multiple weapons with delays
+	"""Fire a weapon from a ship. Mirrors weapons_fire()."""
+	# weapon_fire_mine() queues WEAPON_MINE_COUNT weapons at once, each with its
+	# own staggered release timer.
 	if weapon_type == WipeoutWeapon.WeaponType.MINE:
 		var last_weapon: WipeoutWeapon = null
-		var timer = 0.0
-		for i in range(WipeoutWeapon.MINE_COUNT):
+		var release_timer := 0.0
+		for i in WipeoutWeapon.MINE_COUNT:
 			if weapons.size() >= MAX_WEAPONS:
 				break
-			timer += WipeoutWeapon.MINE_RELEASE_RATE
-			var weapon = _create_mine_weapon(ship, timer)
-			if weapon:
-				weapons.append(weapon)
-				last_weapon = weapon
+			release_timer += WipeoutWeapon.MINE_RELEASE_RATE
+			var mine := _spawn_weapon()
+			if mine == null:
+				break
+			mine.fire_mine_delayed(ship, release_timer)
+			weapons.append(mine)
+			last_weapon = mine
 		weapon_fired.emit(ship, weapon_type)
 		return last_weapon
 
 	if weapons.size() >= MAX_WEAPONS:
 		return null
 
-	var weapon = _create_weapon(ship, weapon_type, target)
-	if weapon:
-		weapons.append(weapon)
-		weapon_fired.emit(ship, weapon_type)
-
+	var weapon := _spawn_weapon()
+	if weapon == null:
+		return null
+	weapon.fire(ship, weapon_type, target)
+	weapons.append(weapon)
+	weapon_fired.emit(ship, weapon_type)
 	return weapon
 
 
 func fire_weapon_delayed(ship: WipeoutShip, weapon_type: WipeoutWeapon.WeaponType, target: WipeoutShip = null) -> void:
-	"""Fire a weapon with a delay (for AI)"""
-	weapon_fire_delays[ship] = WipeoutWeapon.AI_DELAY
+	"""weapons_fire_delayed(): AI ships sit on a weapon for WEAPON_AI_DELAY first."""
 	await get_tree().create_timer(WipeoutWeapon.AI_DELAY).timeout
+	if not is_instance_valid(ship):
+		return
 	fire_weapon(ship, weapon_type, target)
 
 
 func get_random_weapon(weapon_class: int = WEAPON_CLASS_ANY) -> WipeoutWeapon.WeaponType:
-	"""Get a random weapon type based on probability tables"""
-	var probabilities = WEAPON_PROBABILITIES_ANY if weapon_class == WEAPON_CLASS_ANY else WEAPON_PROBABILITIES_PROJECTILE
-	var rand = randf()
-	var cumulative = 0.0
+	"""weapon_get_random_type(): weighted pick over the class's ladder."""
+	var weights := WEAPON_WEIGHTS_ANY if weapon_class == WEAPON_CLASS_ANY else WEAPON_WEIGHTS_PROJECTILE
+	var total := 0
+	for entry in weights:
+		total += int(entry[1])
 
-	for weapon_type in probabilities:
-		cumulative += probabilities[weapon_type]
-		if rand < cumulative:
-			return weapon_type
-
+	var roll := randi() % total
+	for entry in weights:
+		roll -= int(entry[1])
+		if roll < 0:
+			return entry[0]
 	return WipeoutWeapon.WeaponType.ROCKET
 
 
-func _create_weapon(ship: WipeoutShip, weapon_type: WipeoutWeapon.WeaponType, target: WipeoutShip = null) -> WipeoutWeapon:
-	"""Create and initialize a new weapon"""
-	var weapon: WipeoutWeapon
+## Weapons parent to the running scene, not to this autoload, so leaving a race
+## takes them with it.
+func _spawn_weapon() -> WipeoutWeapon:
+	# current_scene is null under `--script`, where the tools instance the scene
+	# by hand; the tree root is the right owner there.
+	var parent: Node = get_tree().current_scene
+	if parent == null:
+		parent = get_tree().root
+	if parent == null:
+		return null
 
-	if weapon_scene:
+	var weapon: WipeoutWeapon
+	if weapon_scene != null:
 		weapon = weapon_scene.instantiate() as WipeoutWeapon
 	else:
 		weapon = WipeoutWeapon.new()
-
-	get_tree().root.add_child(weapon)
-	weapon.fire(ship, weapon_type, target)
-
-	return weapon
-
-
-func _create_mine_weapon(ship: WipeoutShip, timer: float) -> WipeoutWeapon:
-	"""Create a mine weapon with a specific release timer"""
-	var weapon: WipeoutWeapon
-
-	if weapon_scene:
-		weapon = weapon_scene.instantiate() as WipeoutWeapon
-	else:
-		weapon = WipeoutWeapon.new()
-
-	get_tree().root.add_child(weapon)
-	weapon.owner_ship = ship
-	weapon.weapon_type = WipeoutWeapon.WeaponType.MINE
-	weapon.active = true
-	weapon.global_position = ship.global_position
-	weapon.global_rotation = ship.global_rotation
-	weapon.is_waiting_for_release = true
-	weapon.release_timer = timer
-	weapon.timer = WipeoutWeapon.MINE_DURATION
-	weapon._load_model(WipeoutWeapon.WeaponType.MINE)
-
+	parent.add_child(weapon)
 	return weapon
 
 
 func clear_all_weapons() -> void:
-	"""Remove all active weapons from the scene"""
+	"""weapons_init(): drop everything still in flight before a new race."""
 	for weapon in weapons:
 		if is_instance_valid(weapon):
 			weapon.queue_free()
@@ -149,5 +157,4 @@ func clear_all_weapons() -> void:
 
 
 func get_active_weapons_count() -> int:
-	"""Get the count of active weapons"""
 	return weapons.size()

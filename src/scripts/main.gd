@@ -7,10 +7,11 @@ const RaceFieldScript = preload("res://scripts/race_field.gd")
 
 
 func _ready() -> void:
-	# Initialize weapon manager
-	var weapon_manager = WipeoutWeaponManager.new()
-	weapon_manager.name = "WeaponManager"
-	add_child(weapon_manager)
+	# weapons_init(): the manager is an autoload, so anything still in flight
+	# from a previous race has to be dropped here.
+	var weapon_manager := WipeoutWeaponManager.instance(get_tree())
+	if weapon_manager != null:
+		weapon_manager.clear_all_weapons()
 
 	var track_scene: PackedScene = default_track_scene
 	if TrackSelection.selected_track_scene != null:

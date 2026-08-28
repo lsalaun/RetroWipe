@@ -298,6 +298,7 @@ func _physics_process(delta: float) -> void:
 	_apply_drive_forces(up, steer, pitch_input, grounded, delta)
 
 	ship_impact_cooldown = maxf(ship_impact_cooldown - delta, 0.0)
+	_update_weapons(delta)
 	global_position += velocity * delta
 	_handle_wall_collisions(up, delta)
 	_resolve_hull_penetration(delta)
@@ -933,17 +934,16 @@ func _wants_reset() -> bool:
 
 # ==================== WEAPON METHODS ====================
 
+## weapons_fire(): hand the weapon to the manager, then clear the slot
+## (`ship->weapon_type = WEAPON_TYPE_NONE`).
 func fire_weapon(wtype: WipeoutWeapon.WeaponType, target: WipeoutShip = null) -> void:
-	"""Fire a weapon from this ship"""
-	if weapon_fire_cooldown > 0.0:
+	if wtype == WipeoutWeapon.WeaponType.NONE or weapon_fire_cooldown > 0.0:
 		return
 
-	weapon_type = wtype
 	weapon_target = target
-
-	var weapon_manager = get_tree().root.get_child(0).get_node_or_null("WeaponManager")
-	if weapon_manager:
-		weapon_manager.fire_weapon(self, wtype, target)
+	var manager := WipeoutWeaponManager.instance(get_tree())
+	if manager != null:
+		manager.fire_weapon(self, wtype, target)
 
 	weapon_fire_cooldown = WipeoutWeapon.WEAPON_DELAY
 	weapon_type = WipeoutWeapon.WeaponType.NONE
@@ -951,9 +951,39 @@ func fire_weapon(wtype: WipeoutWeapon.WeaponType, target: WipeoutShip = null) ->
 
 func fire_weapon_delayed(wtype: WipeoutWeapon.WeaponType, target: WipeoutShip = null) -> void:
 	"""Fire a weapon with a delay (for AI)"""
-	var weapon_manager = get_tree().root.get_child(0).get_node_or_null("WeaponManager")
-	if weapon_manager:
-		weapon_manager.fire_weapon_delayed(self, wtype, target)
+	var manager := WipeoutWeaponManager.instance(get_tree())
+	if manager != null:
+		manager.fire_weapon_delayed(self, wtype, target)
+
+
+## Fires whatever is in the weapon slot at the ship ahead. Guided weapons need a
+## target; the rest ignore it.
+func fire_held_weapon() -> void:
+	if weapon_type == WipeoutWeapon.WeaponType.NONE:
+		return
+	fire_weapon(weapon_type, _acquire_weapon_target())
+
+
+## weapon_target in ship.c is the ship one place ahead on the road. Approximated
+## here with the nearest ship in front along our own forward axis.
+func _acquire_weapon_target() -> WipeoutShip:
+	var forward := -global_transform.basis.z
+	var best: WipeoutShip = null
+	var best_distance := INF
+
+	for node in get_tree().get_nodes_in_group(&"ships"):
+		var other := node as WipeoutShip
+		if other == null or other == self:
+			continue
+		var to_other := other.global_position - global_position
+		if forward.dot(to_other) <= 0.0:
+			continue
+		var distance := to_other.length()
+		if distance < best_distance:
+			best_distance = distance
+			best = other
+
+	return best
 
 
 func has_shield() -> bool:
@@ -981,7 +1011,25 @@ func apply_electro_effect(duration: float) -> void:
 
 func get_random_weapon(weapon_class: int = 1) -> WipeoutWeapon.WeaponType:
 	"""Get a random weapon type"""
-	var weapon_manager = get_tree().root.get_child(0).get_node_or_null("WeaponManager")
-	if weapon_manager:
-		return weapon_manager.get_random_weapon(weapon_class)
-	return WipeoutWeapon.WeaponType.ROCKET
+	var manager := WipeoutWeaponManager.instance(get_tree())
+	if manager == null:
+		return WipeoutWeapon.WeaponType.ROCKET
+	return manager.get_random_weapon(weapon_class)
+
+
+## Ticks the weapon slot's own timers and fires on player input. Called from
+## _physics_process(), the Godot stand-in for ship_player_update_race()'s
+## weapon block.
+func _update_weapons(delta: float) -> void:
+	weapon_fire_cooldown = maxf(weapon_fire_cooldown - delta, 0.0)
+
+	if shield_active:
+		shield_timer -= delta
+		if shield_timer <= 0.0:
+			remove_shield()
+
+	if ebolt_timer > 0.0:
+		ebolt_timer -= delta
+
+	if is_player_controlled and race_control_enabled and Input.is_action_just_pressed(&"ship_fire"):
+		fire_held_weapon()

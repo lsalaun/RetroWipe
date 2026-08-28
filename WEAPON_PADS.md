@@ -1,5 +1,9 @@
 # Weapon Pads System
 
+> **Controls**: press **Space** (or the gamepad's **X / Square** button) to fire
+> the weapon you are holding. The held weapon's name is shown at the top-centre
+> of the HUD; a pad only arms you when that slot is empty.
+
 ## Overview
 
 The weapon pads system allows players to pick up weapons scattered on the track. When a ship drives over a weapon pad, it randomly receives one of the available weapon types. Each pad can only give one weapon at a time and must respawn before giving another.

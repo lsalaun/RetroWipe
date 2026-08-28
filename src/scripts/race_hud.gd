@@ -56,6 +56,7 @@ func _draw() -> void:
 	_draw_lap_counter()
 	_draw_position()
 	_draw_lap_record()
+	_draw_weapon()
 	_draw_stats()
 	_draw_wrong_way()
 	_draw_countdown()
@@ -115,6 +116,20 @@ func _draw_stats() -> void:
 	WipeoutUI.draw_text(self, "MS", _at(Vector2(64, 78)), SIZE_8, ACCENT, HUD_SCALE)
 	var frame_ms := int(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
 	WipeoutUI.draw_text(self, str(frame_ms), _at(Vector2(64, 90)), SIZE_8, DEFAULT, HUD_SCALE)
+
+
+## hud.c draws the held weapon as a WICONS sprite centred at the top of the
+## screen. Those icons are not imported yet, so the name is drawn as text in the
+## same spot, with the SHIELD readout while one is up.
+func _draw_weapon() -> void:
+	if _ship.shield_active:
+		WipeoutUI.draw_text_centered(self, "SHIELD", _at(Vector2(0, 8), Vector2(0.5, 0.0)), SIZE_8, ACCENT, HUD_SCALE)
+		return
+
+	var label := WipeoutWeapon.weapon_name(_ship.weapon_type)
+	if label.is_empty():
+		return
+	WipeoutUI.draw_text_centered(self, label, _at(Vector2(0, 8), Vector2(0.5, 0.0)), SIZE_16, DEFAULT, HUD_SCALE)
 
 
 func _draw_wrong_way() -> void:

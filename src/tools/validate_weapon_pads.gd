@@ -1,77 +1,112 @@
-@tool
-extends EditorScript
+extends SceneTree
 
-## Validation tool for weapon pads on tracks
-## Checks that all weapon pads are properly placed and configured
+## Headless check of the weapon pickup chain: the track spawns pads, driving the
+## player into one fills its empty weapon slot, firing spends the slot and puts a
+## live weapon in the scene.
 
-class_name ValidateWeaponPads
+const WAIT_FRAMES := 240
+
+var _main: Node3D = null
+var _failures: Array[String] = []
 
 
-func _run() -> void:
-	var scene = get_scene()
+func _initialize() -> void:
+	var scene := load("res://scenes/main.tscn") as PackedScene
 	if scene == null:
-		print("ERROR: No scene loaded")
+		push_error("main.tscn failed to load")
+		quit(1)
+		return
+	_main = scene.instantiate() as Node3D
+	root.add_child(_main)
+
+
+func _process(_delta: float) -> bool:
+	# One frame is enough for _ready() to run across the tree.
+	_run_checks()
+	_report()
+	return true
+
+
+func _run_checks() -> void:
+	# 1. The weapon scene and its models resolve (res:// is godot/src, so a
+	# "res://src/..." path would silently yield null here).
+	if load("res://scenes/wipeout_weapon.tscn") == null:
+		_failures.append("wipeout_weapon.tscn failed to load")
+	for wtype in WipeoutWeapon.WEAPON_MODELS:
+		var path: String = WipeoutWeapon.WEAPON_MODELS[wtype]
+		if load(path) == null:
+			_failures.append("weapon model missing: %s" % path)
+
+	# 2. The manager resolves (autoload in game, fallback under --script).
+	var manager := WipeoutWeaponManager.instance(self)
+	if manager == null:
+		_failures.append("weapon manager could not be resolved")
 		return
 
-	var issues = []
+	# 3. The random table only ever yields weapons the port implements.
+	for i in 200:
+		var picked: int = manager.get_random_weapon(manager.WEAPON_CLASS_ANY)
+		if WipeoutWeapon.weapon_name(picked).is_empty():
+			_failures.append("get_random_weapon returned unimplemented type %d" % picked)
+			break
 
-	# Find all weapon pads
-	var weapon_pads = _find_nodes_of_type(scene, "TrackWeaponPad")
-	if weapon_pads.is_empty():
-		print("WARNING: No weapon pads found on track")
+	# 4. The track actually spawned pads.
+	var pads := _find_pads(_main)
+	if pads.is_empty():
+		_failures.append("no TrackWeaponPad spawned on the track")
+
+	# 5. A ship parked on a pad picks a weapon up, and only while its slot is empty.
+	var player := _find_player()
+	if player == null:
+		_failures.append("no player ship found")
 		return
+	if not pads.is_empty():
+		var pad: Area3D = pads[0]
+		player.weapon_type = WipeoutWeapon.WeaponType.NONE
+		pad._on_area_entered(player.get_node("HullArea"))
+		if player.weapon_type == WipeoutWeapon.WeaponType.NONE:
+			_failures.append("driving onto a pad did not arm the ship")
+		# A pad must never overwrite a weapon the ship is already holding.
+		var held := player.weapon_type
+		player.weapon_type = WipeoutWeapon.WeaponType.ROCKET
+		pad._on_area_entered(player.get_node("HullArea"))
+		if player.weapon_type != WipeoutWeapon.WeaponType.ROCKET:
+			_failures.append("pad overwrote a weapon the ship was already holding")
+		print("  pads=%d  first pickup=%s" % [pads.size(), WipeoutWeapon.weapon_name(held)])
 
-	print("Found %d weapon pads" % weapon_pads.size())
-
-	# Check each pad
-	for i in range(weapon_pads.size()):
-		var pad = weapon_pads[i]
-		var pad_issues = _validate_pad(pad, i)
-		issues.append_array(pad_issues)
-
-	# Print results
-	if issues.is_empty():
-		print("✓ All weapon pads are valid")
-	else:
-		print("ERROR: Found %d issues:" % issues.size())
-		for issue in issues:
-			print("  - %s" % issue)
-
-
-func _validate_pad(pad: Node3D, index: int) -> Array:
-	"""Validate a single weapon pad"""
-	var issues = []
-
-	# Check if pad is a TrackWeaponPad
-	if not pad.get_script():
-		issues.append("Pad %d: Missing script" % index)
-		return issues
-
-	# Check position
-	if pad.global_position == Vector3.ZERO:
-		issues.append("Pad %d (%s): Position is at origin" % [index, pad.name])
-
-	# Check collision shape exists
-	var collision_shapes = _find_nodes_of_type(pad, "CollisionShape3D")
-	if collision_shapes.is_empty():
-		issues.append("Pad %d (%s): No collision shape found" % [index, pad.name])
-
-	# Check if pad has visual
-	var visual = pad.get_node_or_null("Visual")
-	if not visual:
-		print("  WARNING: Pad %d (%s): No visual representation" % [index, pad.name])
-
-	return issues
+	# 6. Firing spends the slot and puts a weapon in the scene.
+	player.weapon_type = WipeoutWeapon.WeaponType.ROCKET
+	player.weapon_fire_cooldown = 0.0
+	player.fire_held_weapon()
+	if player.weapon_type != WipeoutWeapon.WeaponType.NONE:
+		_failures.append("firing did not clear the weapon slot")
+	if manager.get_active_weapons_count() == 0:
+		_failures.append("firing did not spawn a weapon")
 
 
-func _find_nodes_of_type(root: Node, target_class: String) -> Array:
-	"""Find all nodes of a specific class"""
-	var results = []
+func _find_pads(node: Node) -> Array[Area3D]:
+	var found: Array[Area3D] = []
+	if node is TrackWeaponPad:
+		found.append(node)
+	for child in node.get_children():
+		found.append_array(_find_pads(child))
+	return found
 
-	if root.get_class() == target_class or root.is_class(target_class):
-		results.append(root)
 
-	for child in root.get_children():
-		results.append_array(_find_nodes_of_type(child, target_class))
+func _find_player() -> WipeoutShip:
+	for node in get_nodes_in_group(&"ships"):
+		var ship := node as WipeoutShip
+		if ship != null and ship.is_player_controlled:
+			return ship
+	return null
 
-	return results
+
+func _report() -> void:
+	if _failures.is_empty():
+		print("OK: weapon pickup chain works")
+		quit(0)
+		return
+	for failure in _failures:
+		push_error(failure)
+		print("FAIL: %s" % failure)
+	quit(1)

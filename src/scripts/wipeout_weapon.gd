@@ -2,7 +2,17 @@ extends Node3D
 
 class_name WipeoutWeapon
 
-# Weapon types matching the C implementation
+## One live weapon, ported from weapon.c's `weapon_t` plus its per-type
+## `update_func`. The manager (WipeoutWeaponManager, autoloaded as
+## `WeaponManager`) owns the fleet; each instance frees itself when its timer
+## runs out or it hits something.
+##
+## Tuning note, same convention as wipeout_ship.gd: the PSX source works in
+## 1/106.5-metre units on a fixed 30 Hz step, so its raw constants (acceleration
+## 256, collision distance 512) do not transfer as literals. What is ported
+## faithfully is the *behaviour* -- which weapons home, how long each lives, and
+## the relative severity of each hit -- with magnitudes expressed in m and m/s.
+
 enum WeaponType {
 	NONE = 0,
 	MINE = 1,
@@ -16,74 +26,53 @@ enum WeaponType {
 	TURBO = 9,
 }
 
-# Hit types
-enum HitType {
-	NONE = 0,
-	SHIP = 1,
-	TRACK = 2,
-}
-
-# Weapon durations (in seconds, converted from NTSC frames)
+# Durations, converted straight from the NTSC frame counts in weapon.h.
 const MINE_DURATION = 450.0 / 30.0
 const ROCKET_DURATION = 200.0 / 30.0
 const EBOLT_DURATION = 140.0 / 30.0
-const REV_CON_DURATION = 60.0 / 30.0
 const MISSILE_DURATION = 200.0 / 30.0
 const SHIELD_DURATION = 200.0 / 30.0
-const FLARE_DURATION = 200.0 / 30.0
-const SPECIAL_DURATION = 400.0 / 30.0
 const MINE_RELEASE_RATE = 3.0 / 30.0
 const WEAPON_DELAY = 40.0 / 30.0
 const MINE_COUNT = 5
-
-# Weapon configuration
-const WEAPON_PARTICLE_SPAWN_RATE = 0.011
 const AI_DELAY = 1.1
 
-# Collision detection
-const SHIP_COLLISION_RADIUS = 0.5  # Godot units
-const MIN_TRACK_HEIGHT = 2.0  # Godot units
-const TARGET_PUSH_HEIGHT = 0.2  # Godot units
+## 512 PSX units / 106.5 units-per-metre (the convert_ships.py scale).
+const SHIP_COLLISION_RADIUS = 4.8
+## Cruise speed for the three projectiles. The source accelerates against a drag
+## term toward a terminal velocity; holding that terminal speed directly is
+## equivalent over the weapon's short life and far steadier at variable delta.
+const PROJECTILE_SPEED = 190.0
+## How fast a homing weapon swings onto its target, rad/s.
+const HOMING_TURN_RATE = 2.4
 
-# Weapon model paths
 const WEAPON_MODELS = {
-	WeaponType.ROCKET: "res://src/assets/weapons/rocket.glb",
-	WeaponType.MINE: "res://src/assets/weapons/mine.glb",
-	WeaponType.MISSILE: "res://src/assets/weapons/missile.glb",
-	WeaponType.SHIELD: "res://src/assets/weapons/shield.glb",
-	WeaponType.EBOLT: "res://src/assets/weapons/ebolt.glb",
+	WeaponType.ROCKET: "res://assets/weapons/rocket.glb",
+	WeaponType.MINE: "res://assets/weapons/mine.glb",
+	WeaponType.MISSILE: "res://assets/weapons/missile.glb",
+	WeaponType.SHIELD: "res://assets/weapons/shield.glb",
+	WeaponType.EBOLT: "res://assets/weapons/ebolt.glb",
 }
 
-# Properties
+## The three types that fly; everything else either sits still (mine) or acts on
+## the owner directly (shield, turbo).
+const PROJECTILES = [WeaponType.ROCKET, WeaponType.MISSILE, WeaponType.EBOLT]
+## Of those, the two that steer toward weapon_target (weapon_follow_target()).
+const HOMING = [WeaponType.MISSILE, WeaponType.EBOLT]
+
 var owner_ship: WipeoutShip
 var target_ship: WipeoutShip
 var weapon_type: WeaponType = WeaponType.NONE
 var timer: float = 0.0
 var active: bool = false
-var mine_count: int = 0  # For multi-mine weapons
 
-# Physics properties
-var velocity: Vector3 = Vector3.ZERO
-var acceleration: Vector3 = Vector3.ZERO
-var drag: float = 0.0
-var trail_spawn_timer: float = 0.0
-
-# Visual properties
 var model: Node3D
-var trail_particles: Array[Node3D] = []
-
-# Audio
-var impact_sound: AudioStreamPlayer3D
-
-# For delayed firing (mines)
 var release_timer: float = 0.0
 var is_waiting_for_release: bool = false
 
 
 func _ready() -> void:
 	add_to_group(&"weapons")
-	impact_sound = AudioStreamPlayer3D.new()
-	add_child(impact_sound)
 
 
 func _physics_process(delta: float) -> void:
@@ -92,56 +81,42 @@ func _physics_process(delta: float) -> void:
 
 	timer -= delta
 
-	# Handle delayed mine release
+	# weapon_update_mine_wait_for_release(): the mine is inert until its slice of
+	# the release stagger has elapsed.
 	if is_waiting_for_release:
 		release_timer -= delta
-		if release_timer <= 0:
+		if release_timer <= 0.0:
 			_initialize_mine()
 		return
 
-	# Check if weapon has expired
-	if timer <= 0:
+	if timer <= 0.0:
 		_deactivate()
 		return
 
-	# Handle projectiles with velocity and acceleration
-	if acceleration != Vector3.ZERO or velocity != Vector3.ZERO:
-		# Apply acceleration
-		if acceleration != Vector3.ZERO:
-			velocity += acceleration * delta
-
-		# Apply drag
-		if drag > 0:
-			velocity *= (1.0 - drag * delta * 30.0)
-
-		# Update position
-		global_position += velocity * delta * 30.0
-
-	# Update animations/effects
 	match weapon_type:
-		WeaponType.MINE:
-			if model:
-				model.rotation.y += delta * 2.0  # Spin animation
 		WeaponType.SHIELD:
-			if model:
-				model.global_position = owner_ship.global_position
-				model.global_rotation = owner_ship.global_rotation
+			# weapon_update_shield(): the bubble rides the owner.
+			if not is_instance_valid(owner_ship):
+				_deactivate()
+				return
+			global_position = owner_ship.global_position
+			global_rotation = owner_ship.global_rotation
+			return # a shield never collides with anything
+		WeaponType.MINE:
+			rotation.y += delta * 2.0 # "self->angle.y += system_tick()"
 
-	# Follow target for guided weapons
-	if target_ship and weapon_type in [WeaponType.MISSILE, WeaponType.EBOLT]:
-		_follow_target()
+	if weapon_type in PROJECTILES:
+		if weapon_type in HOMING:
+			_follow_target(delta)
+		global_position += -global_transform.basis.z * PROJECTILE_SPEED * delta
 
-	# Check for collisions
-	if _check_track_collision():
-		_on_track_hit()
-	else:
-		var hit_ship = _check_ship_collision()
-		if hit_ship:
-			_on_ship_hit(hit_ship)
+	var hit := _check_ship_collision()
+	if hit != null:
+		_on_ship_hit(hit)
 
 
+## weapons_fire(): dispatch on type.
 func fire(ship: WipeoutShip, wtype: WeaponType, target: WipeoutShip = null) -> void:
-	"""Fire a weapon from a ship"""
 	owner_ship = ship
 	target_ship = target
 	weapon_type = wtype
@@ -151,199 +126,134 @@ func fire(ship: WipeoutShip, wtype: WeaponType, target: WipeoutShip = null) -> v
 
 	match wtype:
 		WeaponType.MINE:
-			_fire_mine()
+			timer = MINE_DURATION
+			is_waiting_for_release = true
+			release_timer = MINE_RELEASE_RATE
+			_load_model(wtype)
 		WeaponType.MISSILE:
-			_fire_missile()
+			timer = MISSILE_DURATION
+			_load_model(wtype)
 		WeaponType.ROCKET:
-			_fire_rocket()
+			timer = ROCKET_DURATION
+			_load_model(wtype)
 		WeaponType.EBOLT:
-			_fire_ebolt()
+			timer = EBOLT_DURATION
+			_load_model(wtype)
 		WeaponType.SHIELD:
-			_fire_shield()
+			timer = SHIELD_DURATION
+			_load_model(wtype)
+			ship.apply_shield()
 		WeaponType.TURBO:
 			_fire_turbo()
 
 
-func _fire_mine() -> void:
-	"""Drop a mine - waits before activating"""
+## weapon_fire_mine() drops WEAPON_MINE_COUNT mines in a row; each waits out its
+## own slice of the stagger, then lands at the ship's *current* position, which
+## is what strings them along the racing line.
+func fire_mine_delayed(ship: WipeoutShip, delay: float) -> void:
+	owner_ship = ship
+	weapon_type = WeaponType.MINE
+	active = true
+	global_position = ship.global_position
+	global_rotation = ship.global_rotation
 	is_waiting_for_release = true
-	release_timer = MINE_RELEASE_RATE
-	timer = MINE_DURATION
+	release_timer = delay
+	# timer runs during the wait too, so add the delay back to keep the mine's
+	# armed lifetime at MINE_DURATION.
+	timer = MINE_DURATION + delay
 	_load_model(WeaponType.MINE)
 
 
 func _initialize_mine() -> void:
-	"""Initialize the mine after release timer"""
 	is_waiting_for_release = false
-	if model:
+	if is_instance_valid(owner_ship):
+		global_position = owner_ship.global_position
+	rotation.y = randf_range(0.0, TAU)
+	if model != null:
 		model.visible = true
 
 
-func _fire_missile() -> void:
-	"""Fire a guided missile"""
-	timer = MISSILE_DURATION
-	drag = 0.25
-	_set_trajectory()
-	_load_model(WeaponType.MISSILE)
-
-
-func _fire_rocket() -> void:
-	"""Fire a fast rocket"""
-	timer = ROCKET_DURATION
-	drag = 0.03125
-	_set_trajectory()
-	_load_model(WeaponType.ROCKET)
-
-
-func _fire_ebolt() -> void:
-	"""Fire an electric bolt"""
-	timer = EBOLT_DURATION
-	drag = 0.25
-	_set_trajectory()
-	_load_model(WeaponType.EBOLT)
-
-
-func _fire_shield() -> void:
-	"""Apply a shield to the ship"""
-	timer = SHIELD_DURATION
-	_load_model(WeaponType.SHIELD)
-	owner_ship.apply_shield()
-
-
+## weapon_fire_turbo(): a straight shove along the nose, no projectile at all.
 func _fire_turbo() -> void:
-	"""Apply turbo boost to the ship"""
-	var forward = -owner_ship.global_transform.basis.z
-	owner_ship.velocity += forward * 39321.0 / 1024.0  # Adjusted for Godot scale
+	if is_instance_valid(owner_ship):
+		owner_ship.velocity += -owner_ship.global_transform.basis.z * 60.0
 	_deactivate()
 
 
-func _set_trajectory() -> void:
-	"""Set initial trajectory from ship"""
-	var ship = owner_ship
-	var forward = -ship.global_transform.basis.z
-
-	# Set acceleration to move forward from the ship
-	acceleration = forward * 256.0
-	velocity = ship.velocity * 0.015625
-
-
-func _follow_target() -> void:
-	"""Make weapon follow the target"""
-	if not target_ship:
+## weapon_follow_target(): swing the nose toward the target, then fly along it.
+func _follow_target(delta: float) -> void:
+	if not is_instance_valid(target_ship):
+		return
+	var to_target := target_ship.global_position - global_position
+	if to_target.length_squared() < 0.001:
 		return
 
-	var direction = (target_ship.global_position - global_position).normalized()
-
-	# Update rotation to face target
-	var target_rotation_y = -atan2(direction.x, direction.z)
-	rotation.y = lerp_angle(rotation.y, target_rotation_y, 0.25)
-
-	# Update acceleration to move toward target
-	acceleration = direction * 256.0
+	var desired := Transform3D(global_transform.basis, global_position).looking_at(
+		target_ship.global_position, Vector3.UP
+	)
+	global_transform.basis = global_transform.basis.slerp(
+		desired.basis, minf(1.0, HOMING_TURN_RATE * delta)
+	).orthonormalized()
 
 
-func _load_model(wtype: WeaponType) -> void:
-	"""Load the 3D model for the weapon"""
-	if wtype not in WEAPON_MODELS:
-		return
-
-	# Remove old model if it exists
-	if model and is_instance_valid(model):
-		model.queue_free()
-
-	var model_path = WEAPON_MODELS[wtype]
-	var scene = load(model_path) as PackedScene
-	if scene:
-		model = scene.instantiate()
-		add_child(model)
-
-		# For mines, initially hide until released
-		if wtype == WeaponType.MINE:
-			model.visible = false
-
-
+## weapon_collides_with_ship(): plain radius test against every ship but the owner.
 func _check_ship_collision() -> WipeoutShip:
-	"""Check for collision with other ships"""
-	for ship in get_tree().get_nodes_in_group("ships"):
-		if ship == owner_ship:
+	for node in get_tree().get_nodes_in_group(&"ships"):
+		var ship := node as WipeoutShip
+		if ship == null or ship == owner_ship:
 			continue
-
-		var distance = global_position.distance_to(ship.global_position)
-		if distance < SHIP_COLLISION_RADIUS:
+		if global_position.distance_to(ship.global_position) < SHIP_COLLISION_RADIUS:
 			return ship
-
 	return null
 
 
-func _check_track_collision() -> bool:
-	"""Check for collision with track using raycast"""
-	# TODO: Implement track collision detection using raycasts
-	# For now, assume no track collision
-	return false
-
-
 func _on_ship_hit(ship: WipeoutShip) -> void:
-	"""Handle weapon hitting a ship"""
-	# Play impact sound
-	_play_impact_sound(global_position)
-
-	match weapon_type:
-		WeaponType.MINE:
-			_mine_hit_ship(ship)
-		WeaponType.MISSILE:
-			_missile_hit_ship(ship)
-		WeaponType.ROCKET:
-			_rocket_hit_ship(ship)
-		WeaponType.EBOLT:
-			_ebolt_hit_ship(ship)
-
+	# flags_not(ship->flags, SHIP_SHIELDED): a shielded ship eats the hit with no
+	# effect, but the weapon is still spent.
+	if not ship.has_shield():
+		match weapon_type:
+			WeaponType.MINE:
+				ship.velocity *= 0.125
+			WeaponType.ROCKET:
+				ship.velocity *= 0.25
+			WeaponType.MISSILE:
+				ship.velocity *= 0.03125
+			WeaponType.EBOLT:
+				ship.apply_electro_effect(EBOLT_DURATION)
 	_deactivate()
 
 
-func _on_track_hit() -> void:
-	"""Handle weapon hitting the track"""
-	_play_impact_sound(global_position)
-	_deactivate()
+func _load_model(wtype: WeaponType) -> void:
+	if not WEAPON_MODELS.has(wtype):
+		return
+	if model != null and is_instance_valid(model):
+		model.queue_free()
 
-
-func _mine_hit_ship(ship: WipeoutShip) -> void:
-	"""Mine impact effect: slow down significantly"""
-	if not ship.has_shield():
-		ship.velocity *= 0.125
-
-
-func _missile_hit_ship(ship: WipeoutShip) -> void:
-	"""Missile impact effect: heavy damage"""
-	if not ship.has_shield():
-		ship.velocity *= 0.03125
-		ship.velocity.y += randf_range(-0.2, 0.2)
-
-
-func _rocket_hit_ship(ship: WipeoutShip) -> void:
-	"""Rocket impact effect: moderate damage"""
-	if not ship.has_shield():
-		ship.velocity *= 0.25
-
-
-func _ebolt_hit_ship(ship: WipeoutShip) -> void:
-	"""Electric bolt impact effect: disable controls"""
-	if not ship.has_shield():
-		ship.apply_electro_effect(EBOLT_DURATION)
-
-
-func _play_impact_sound(position: Vector3) -> void:
-	"""Play impact sound at position"""
-	if impact_sound and impact_sound.stream:
-		impact_sound.global_position = position
-		impact_sound.play()
+	var scene := load(WEAPON_MODELS[wtype]) as PackedScene
+	if scene == null:
+		return
+	model = scene.instantiate()
+	add_child(model)
+	# A mine stays invisible until it is actually released.
+	if wtype == WeaponType.MINE:
+		model.visible = false
 
 
 func _deactivate() -> void:
-	"""Deactivate and remove the weapon"""
 	active = false
-
-	# Remove shield effect if applicable
-	if weapon_type == WeaponType.SHIELD and owner_ship:
+	if weapon_type == WeaponType.SHIELD and is_instance_valid(owner_ship):
 		owner_ship.remove_shield()
-
 	queue_free()
+
+
+## Short label for the HUD. hud.c draws a WICONS sprite here instead; those icons
+## are not imported yet, so the port shows the name as text.
+static func weapon_name(wtype: WeaponType) -> String:
+	match wtype:
+		WeaponType.MINE: return "MINES"
+		WeaponType.MISSILE: return "MISSILE"
+		WeaponType.ROCKET: return "ROCKET"
+		WeaponType.EBOLT: return "E-BOLT"
+		WeaponType.SHIELD: return "SHIELD"
+		WeaponType.TURBO: return "TURBO"
+		_: return ""

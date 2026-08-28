@@ -94,6 +94,10 @@ func _ensure_input_map_defaults() -> Dictionary:
 		_key_event(KEY_R),
 		_joypad_button_event(JOY_BUTTON_BACK),
 	])
+	serialized_actions[String(&"ship_fire")] = _ensure_action(&"ship_fire", 0.5, [
+		_key_event(KEY_SPACE),
+		_joypad_button_event(JOY_BUTTON_X), # west face button: Xbox "X" / PlayStation "Square"
+	])
 	return serialized_actions
 
 

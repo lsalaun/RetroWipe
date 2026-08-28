@@ -19,6 +19,21 @@ const MUSIC_PATHS: Array[String] = [
 	"res://assets/music/wipeout.mp3",
 ]
 
+## def.music names in MUSIC_PATHS order, listed by ingame_menus.c's MUSIC page.
+const MUSIC_NAMES: Array[String] = [
+	"CAIRODROME",
+	"CARDINAL DANCER",
+	"COLD COMFORT",
+	"DOH T",
+	"MESSIJ",
+	"OPERATIQUE",
+	"TENTATIVE",
+	"TRANCEVAAL",
+	"AFRO RIDE",
+	"CHEMICAL BEATS",
+	"WIPEOUT",
+]
+
 enum MusicMode { PAUSED, RANDOM, SEQUENTIAL, LOOP }
 
 var music_mode: int = MusicMode.RANDOM

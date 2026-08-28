@@ -1,6 +1,8 @@
 extends SceneTree
 
-## Headless check that PauseMenu has no on-track MENU button and toggles via _pause/_resume.
+## Headless check that PauseMenu opens and closes the drawn ingame_menus.c page
+## through pause()/resume(), pausing the tree with it, and that the race screen
+## carries no on-track menu button.
 
 const PAUSE_SCENE := "res://scenes/PauseMenu.tscn"
 
@@ -27,30 +29,34 @@ func _physics_process(_delta: float) -> bool:
 	_frames += 1
 	if _frames < 3:
 		return false
+
 	if _phase == 0:
 		if not _check_closed():
 			quit(1)
 			return true
-		if _menu.has_method("_pause"):
-			_menu.call("_pause")
-		else:
-			push_error("validate_pause_menu: missing _pause")
+		if _has_any_button(_menu):
+			push_error("validate_pause_menu: the pause menu must be drawn, not built from Buttons")
 			quit(1)
 			return true
+		_menu.call("pause")
 		_phase = 1
 		return false
+
 	if _phase == 1:
 		if not _check_open():
 			quit(1)
 			return true
-		var continue_button := _menu.get_node_or_null("Panel/CenterContainer/VBoxContainer/ContinueButton") as Button
-		if continue_button == null:
-			push_error("validate_pause_menu: missing ContinueButton")
+		# ingame_menus.c's first entry is CONTINUE, which unpauses the race.
+		var page = _page()
+		var entries: Array = page.current_page().entries
+		if entries.size() != 4 or entries[0].text != "CONTINUE":
+			push_error("validate_pause_menu: expected CONTINUE / RESTART / QUIT / MUSIC")
 			quit(1)
 			return true
-		continue_button.pressed.emit()
+		page.activate_entry(entries[0])
 		_phase = 2
 		return false
+
 	if not _check_closed():
 		quit(1)
 		return true
@@ -59,17 +65,17 @@ func _physics_process(_delta: float) -> bool:
 	return true
 
 
+func _page() -> Control:
+	return _menu.get_node_or_null("Menu") as Control
+
+
 func _check_closed() -> bool:
-	var panel := _menu.get_node_or_null("Panel") as Panel
-	var menu_button := _menu.get_node_or_null("MenuButton") as Button
-	if panel == null or menu_button == null:
-		push_error("validate_pause_menu: missing Panel/MenuButton")
+	var page := _page()
+	if page == null:
+		push_error("validate_pause_menu: missing Menu")
 		return false
-	if panel.visible:
-		push_error("validate_pause_menu: panel should be hidden")
-		return false
-	if menu_button.visible:
-		push_error("validate_pause_menu: MENU button must stay hidden on track")
+	if page.visible:
+		push_error("validate_pause_menu: the menu should be hidden on track")
 		return false
 	if paused:
 		push_error("validate_pause_menu: tree should not be paused")
@@ -78,18 +84,23 @@ func _check_closed() -> bool:
 
 
 func _check_open() -> bool:
-	var panel := _menu.get_node_or_null("Panel") as Panel
-	var menu_button := _menu.get_node_or_null("MenuButton") as Button
-	if panel == null or menu_button == null:
-		push_error("validate_pause_menu: missing Panel/MenuButton")
+	var page := _page()
+	if page == null:
+		push_error("validate_pause_menu: missing Menu")
 		return false
-	if not panel.visible:
-		push_error("validate_pause_menu: panel should be visible")
-		return false
-	if menu_button.visible:
-		push_error("validate_pause_menu: MENU button must stay hidden while paused")
+	if not page.visible:
+		push_error("validate_pause_menu: the menu should be visible")
 		return false
 	if not paused:
 		push_error("validate_pause_menu: tree should be paused")
 		return false
 	return true
+
+
+func _has_any_button(node: Node) -> bool:
+	if node is BaseButton:
+		return true
+	for child in node.get_children():
+		if _has_any_button(child):
+			return true
+	return false

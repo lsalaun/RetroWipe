@@ -1,71 +1,19 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/pause_menu.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/pause_menu_page.gd" id="2_page"]
 
 [node name="PauseMenu" type="CanvasLayer"]
 process_mode = 3
 script = ExtResource("1_script")
 
-[node name="Panel" type="Panel" parent="."]
+[node name="Menu" type="Control" parent="."]
 visible = false
-mouse_filter = 2
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="CenterContainer" type="CenterContainer" parent="Panel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="VBoxContainer" type="VBoxContainer" parent="Panel/CenterContainer"]
-layout_mode = 2
-theme_override_constants/separation = 16
-
-[node name="Title" type="Label" parent="Panel/CenterContainer/VBoxContainer"]
-layout_mode = 2
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 28
-text = "PAUSED"
-
-[node name="ContinueButton" type="Button" parent="Panel/CenterContainer/VBoxContainer"]
-layout_mode = 2
-text = "CONTINUE"
-
-[node name="RestartButton" type="Button" parent="Panel/CenterContainer/VBoxContainer"]
-layout_mode = 2
-text = "RESTART"
-
-[node name="QuitButton" type="Button" parent="Panel/CenterContainer/VBoxContainer"]
-layout_mode = 2
-text = "QUIT TO MENU"
-
-[node name="QuitConfirmDialog" type="ConfirmationDialog" parent="."]
-title = "QUIT"
-dialog_text = "ARE YOU SURE YOU WANT TO QUIT?"
-
-[node name="RestartConfirmDialog" type="ConfirmationDialog" parent="."]
-title = "RESTART"
-dialog_text = "ARE YOU SURE YOU WANT TO RESTART?"
-
-[node name="MenuButton" type="Button" parent="."]
-visible = false
-mouse_filter = 2
 process_mode = 3
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -96.0
-offset_top = -72.0
-offset_right = 96.0
-offset_bottom = -24.0
 grow_horizontal = 2
-grow_vertical = 0
-text = "MENU"
+grow_vertical = 2
+script = ExtResource("2_page")

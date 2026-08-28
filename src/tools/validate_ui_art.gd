@@ -88,9 +88,12 @@ func _check_title() -> bool:
 	if art.texture.resource_path != WIPTITLE:
 		push_error("validate_ui_art: title %s" % art.texture.resource_path)
 		return false
-	var start := _title.get_node_or_null("StartButton") as Button
-	if start == null or start.text != "PRESS ENTER":
-		push_error("validate_ui_art: title StartButton")
+	# title.c draws the prompt itself, so there is no Button to inspect.
+	if not _title.has_method("current_page"):
+		push_error("validate_ui_art: title is not a WipeoutMenu")
+		return false
+	if _title.PROMPT != "PRESS ENTER" or _title.PROMPT_POS != Vector2(0, -40):
+		push_error("validate_ui_art: title prompt %s at %s" % [_title.PROMPT, _title.PROMPT_POS])
 		return false
 	return true
 
@@ -110,11 +113,15 @@ func _check_menu() -> bool:
 
 
 func _check_portraits() -> bool:
-	var portrait := _pilot.get_node_or_null("CenterContainer/HBoxContainer/Portrait") as TextureRect
-	if portrait == null or portrait.texture == null:
+	# page_pilot_draw()'s artwork is drawn, so the texture comes off the page.
+	if not _pilot.has_method("portrait_texture"):
+		push_error("validate_ui_art: PilotMenu is not a WipeoutMenu")
+		return false
+	var portrait := _pilot.portrait_texture(0) as Texture2D
+	if portrait == null:
 		push_error("validate_ui_art: PilotMenu portrait empty")
 		return false
-	var path := str(portrait.texture.resource_path)
+	var path := str(portrait.resource_path)
 	if not path.begins_with("res://assets/ui/"):
 		push_error("validate_ui_art: portrait path %s" % path)
 		return false

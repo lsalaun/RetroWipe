@@ -39,6 +39,10 @@ const TRACKS: Array[Dictionary] = [
 ## sections before start_line_pos, which is where each track's ShipSpawn sits.
 const SPAWN_SECTION_OFFSET := 15
 
+## RaceSetup.RACE_CLASS_RAPIER, duplicated because RaceSetup is registered after
+## this autoload and referencing it here would fail to compile at startup.
+const RAPIER_CLASS := 1
+
 const LOADING_SCENE := "res://scenes/LoadingScreen.tscn"
 const RACE_SCENE := "res://scenes/main.tscn"
 
@@ -77,3 +81,41 @@ func selected_start_line_section() -> int:
 
 func start_race(tree: SceneTree) -> void:
 	tree.change_scene_to_file(LOADING_SCENE)
+
+
+## def.circuits order for the seven WIPEOUT circuits (game.h, CIRCUIT_ALTIMA_VII
+## .. CIRCUIT_FIRESTAR). main_menu.c's page_circuit_init lists them in this
+## order, and track.cmp's preview images are indexed by the same enum.
+const CIRCUIT_ORDER: Array[String] = [
+	"ALTIMA VII",
+	"KARBONIS V",
+	"TERRAMAX",
+	"KORODERA",
+	"ARRIDOS IV",
+	"SILVERSTREAM",
+	"FIRESTAR",
+]
+
+
+## track.cmp entry `circuit_index`, exported as assets/ui/track/track_NN.png:
+## the 128x74 preview main_menu.c's page_circuit_draw shows for the highlighted
+## circuit.
+func circuit_image_path(circuit_index: int) -> String:
+	return "res://assets/ui/track/track_%02d.png" % circuit_index
+
+
+## TRACKS carries one entry per PSX track file, i.e. a venom and a rapier
+## variant of each circuit, the rapier ones naming their circuit under
+## `circuit`. The original menu instead lists each circuit once and takes the
+## variant from g.race_class, which is what this resolves here. `race_class` is
+## a RaceSetup.RACE_CLASS_* value. Returns "" if the circuit has no track for
+## that class.
+func scene_for_circuit(circuit: String, race_class: int) -> String:
+	var want_rapier := race_class == RAPIER_CLASS
+	for track in TRACKS:
+		var track_name := str(track["name"])
+		if track_name.ends_with(" RAPIER") != want_rapier:
+			continue
+		if str(track.get("circuit", track_name)) == circuit:
+			return str(track["scene"])
+	return ""

@@ -1,29 +1,28 @@
-extends Control
+extends WipeoutMenu
 
 ## Team selection: src/wipeout/main_menu.c's page_team_init.
+##
+## The original spins the team logo and both of its ships above the list
+## (page_team_draw); the menu models are not imported in this port.
 
-const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
-
-@onready var option_list: VBoxContainer = $CenterContainer/VBoxContainer/OptionList
-@onready var back_button: Button = $CenterContainer/VBoxContainer/BackButton
-
-
-func _ready() -> void:
-	MenuBackdrop.attach(self)
-	for team_name in RaceSetup.TEAM_ORDER:
-		var button := Button.new()
-		button.text = team_name
-		button.pressed.connect(_on_team_selected.bind(team_name))
-		option_list.add_child(button)
-	back_button.pressed.connect(_on_back_pressed)
-	GameAudio.hook_menu(self)
-	option_list.get_child(0).grab_focus()
+const RACE_TYPE_MENU := "res://scenes/RaceTypeMenu.tscn"
+const PILOT_MENU := "res://scenes/PilotMenu.tscn"
 
 
-func _on_team_selected(team_name: String) -> void:
-	RaceSetup.select_team(team_name)
-	get_tree().change_scene_to_file("res://scenes/PilotMenu.tscn")
+func _build() -> void:
+	back_scene = RACE_TYPE_MENU
+
+	var page := push_page("SELECT YOUR TEAM")
+	page.layout_flags |= FIXED
+	page.title_pos = Vector2(0.0, 30.0)
+	page.title_anchor = TOP_CENTER
+	page.items_pos = Vector2(0.0, -110.0)
+	page.items_anchor = BOTTOM_CENTER
+
+	for i in RaceSetup.TEAM_ORDER.size():
+		page.add_button(i, RaceSetup.TEAM_ORDER[i], _select_team)
 
 
-func _on_back_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/RaceTypeMenu.tscn")
+func _select_team(data: int) -> void:
+	RaceSetup.select_team(RaceSetup.TEAM_ORDER[data])
+	get_tree().change_scene_to_file(PILOT_MENU)

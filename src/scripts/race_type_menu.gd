@@ -1,30 +1,29 @@
-extends Control
+extends WipeoutMenu
 
 ## Race type selection: src/wipeout/main_menu.c's page_race_type_init
 ## (CHAMPIONSHIP RACE / SINGLE RACE / TIME TRIAL).
+##
+## The original spins a 3D model for the highlighted type; the menu models are
+## not imported in this port.
 
-const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
-
-@onready var option_list: VBoxContainer = $CenterContainer/VBoxContainer/OptionList
-@onready var back_button: Button = $CenterContainer/VBoxContainer/BackButton
+const RACE_CLASS_MENU := "res://scenes/RaceClassMenu.tscn"
+const TEAM_MENU := "res://scenes/TeamMenu.tscn"
 
 
-func _ready() -> void:
-	MenuBackdrop.attach(self)
+func _build() -> void:
+	back_scene = RACE_CLASS_MENU
+
+	var page := push_page("SELECT RACE TYPE")
+	page.layout_flags |= FIXED
+	page.title_pos = Vector2(0.0, 30.0)
+	page.title_anchor = TOP_CENTER
+	page.items_pos = Vector2(0.0, -110.0)
+	page.items_anchor = BOTTOM_CENTER
+
 	for i in RaceSetup.RACE_TYPES.size():
-		var button := Button.new()
-		button.text = RaceSetup.RACE_TYPES[i]
-		button.pressed.connect(_on_type_selected.bind(i))
-		option_list.add_child(button)
-	back_button.pressed.connect(_on_back_pressed)
-	GameAudio.hook_menu(self)
-	option_list.get_child(0).grab_focus()
+		page.add_button(i, RaceSetup.RACE_TYPES[i], _select_type)
 
 
-func _on_type_selected(index: int) -> void:
-	RaceSetup.select_race_type(index)
-	get_tree().change_scene_to_file("res://scenes/TeamMenu.tscn")
-
-
-func _on_back_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/RaceClassMenu.tscn")
+func _select_type(data: int) -> void:
+	RaceSetup.select_race_type(data)
+	get_tree().change_scene_to_file(TEAM_MENU)

@@ -1,60 +1,44 @@
-extends Control
+extends WipeoutMenu
 
-## Video options: src/wipeout/main_menu.c's page_options_video_init
-## (subset applicable to this port: fullscreen, vsync, plus save.draw_stats'
-## FPS readout as a plain on/off toggle).
+## Video options: src/wipeout/main_menu.c's page_options_video_init, i.e. a
+## left-aligned block of toggles with the chosen option flush against the right
+## edge of the 320-unit block.
+##
+## The original's list is tied to its own renderer (internal view roll, screen
+## shake, UI scale, 240p/480p, CRT post effect). This port keeps the settings
+## Settings actually persists; DRAW STATS is save.draw_stats reduced to its
+## OFF / FPS values, which is what the HUD reads.
 
-const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
+const OPTIONS_MENU := "res://scenes/OptionsMenu.tscn"
 
-@onready var fullscreen_button: Button = $CenterContainer/VBoxContainer/FullscreenRow/FullscreenButton
-@onready var vsync_button: Button = $CenterContainer/VBoxContainer/VsyncRow/VsyncButton
-@onready var show_fps_button: Button = $CenterContainer/VBoxContainer/ShowFpsRow/ShowFpsButton
-@onready var back_button: Button = $CenterContainer/VBoxContainer/BackButton
-
-
-func _ready() -> void:
-	MenuBackdrop.attach(self)
-	fullscreen_button.button_pressed = Settings.fullscreen
-	_refresh_fullscreen_text()
-	vsync_button.button_pressed = Settings.vsync
-	_refresh_vsync_text()
-	show_fps_button.button_pressed = Settings.show_fps
-	_refresh_show_fps_text()
-
-	fullscreen_button.toggled.connect(_on_fullscreen_toggled)
-	vsync_button.toggled.connect(_on_vsync_toggled)
-	show_fps_button.toggled.connect(_on_show_fps_toggled)
-	back_button.pressed.connect(_on_back_pressed)
-	GameAudio.hook_menu(self)
-	fullscreen_button.grab_focus()
+## main_menu.c's opts_off_on / opts_draw_stats.
+const OPTS_OFF_ON: PackedStringArray = ["OFF", "ON"]
+const OPTS_DRAW_STATS: PackedStringArray = ["OFF", "FPS"]
 
 
-func _on_fullscreen_toggled(value: bool) -> void:
-	Settings.set_fullscreen(value)
-	_refresh_fullscreen_text()
+func _build() -> void:
+	back_scene = OPTIONS_MENU
+
+	var page := push_page("VIDEO OPTIONS")
+	page.layout_flags = VERTICAL | FIXED
+	page.title_pos = Vector2(-160.0, -100.0)
+	page.title_anchor = MIDDLE_CENTER
+	page.items_pos = Vector2(-160.0, -60.0)
+	page.items_anchor = MIDDLE_CENTER
+	page.block_width = 320
+
+	page.add_toggle(1 if Settings.fullscreen else 0, "FULLSCREEN", OPTS_OFF_ON, _toggle_fullscreen)
+	page.add_toggle(1 if Settings.vsync else 0, "VERTICAL SYNC", OPTS_OFF_ON, _toggle_vsync)
+	page.add_toggle(1 if Settings.show_fps else 0, "DRAW STATS", OPTS_DRAW_STATS, _toggle_draw_stats)
 
 
-func _on_vsync_toggled(value: bool) -> void:
-	Settings.set_vsync(value)
-	_refresh_vsync_text()
+func _toggle_fullscreen(data: int) -> void:
+	Settings.set_fullscreen(data == 1)
 
 
-func _refresh_fullscreen_text() -> void:
-	fullscreen_button.text = "ON" if Settings.fullscreen else "OFF"
+func _toggle_vsync(data: int) -> void:
+	Settings.set_vsync(data == 1)
 
 
-func _on_show_fps_toggled(value: bool) -> void:
-	Settings.set_show_fps(value)
-	_refresh_show_fps_text()
-
-
-func _refresh_vsync_text() -> void:
-	vsync_button.text = "ON" if Settings.vsync else "OFF"
-
-
-func _refresh_show_fps_text() -> void:
-	show_fps_button.text = "ON" if Settings.show_fps else "OFF"
-
-
-func _on_back_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/OptionsMenu.tscn")
+func _toggle_draw_stats(data: int) -> void:
+	Settings.set_show_fps(data == 1)

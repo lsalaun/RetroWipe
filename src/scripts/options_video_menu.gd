@@ -3,12 +3,15 @@ extends Control
 ## Video options: src/wipeout/main_menu.c's page_options_video_init
 ## (subset applicable to this port: fullscreen, vsync).
 
+const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
+
 @onready var fullscreen_button: Button = $CenterContainer/VBoxContainer/FullscreenRow/FullscreenButton
 @onready var vsync_button: Button = $CenterContainer/VBoxContainer/VsyncRow/VsyncButton
 @onready var back_button: Button = $CenterContainer/VBoxContainer/BackButton
 
 
 func _ready() -> void:
+	MenuBackdrop.attach(self)
 	fullscreen_button.button_pressed = Settings.fullscreen
 	_refresh_fullscreen_text()
 	vsync_button.button_pressed = Settings.vsync

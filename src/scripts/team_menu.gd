@@ -2,11 +2,14 @@ extends Control
 
 ## Team selection: src/wipeout/main_menu.c's page_team_init.
 
+const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
+
 @onready var option_list: VBoxContainer = $CenterContainer/VBoxContainer/OptionList
 @onready var back_button: Button = $CenterContainer/VBoxContainer/BackButton
 
 
 func _ready() -> void:
+	MenuBackdrop.attach(self)
 	for team_name in RaceSetup.TEAM_ORDER:
 		var button := Button.new()
 		button.text = team_name

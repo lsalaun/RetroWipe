@@ -3,6 +3,8 @@ extends Control
 ## Options root: src/wipeout/main_menu.c's page_options_init
 ## (CONTROLS / VIDEO / AUDIO).
 
+const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
+
 @onready var controls_button: Button = $CenterContainer/VBoxContainer/ControlsButton
 @onready var video_button: Button = $CenterContainer/VBoxContainer/VideoButton
 @onready var audio_button: Button = $CenterContainer/VBoxContainer/AudioButton
@@ -10,6 +12,7 @@ extends Control
 
 
 func _ready() -> void:
+	MenuBackdrop.attach(self)
 	controls_button.pressed.connect(_on_controls_pressed)
 	video_button.pressed.connect(_on_video_pressed)
 	audio_button.pressed.connect(_on_audio_pressed)

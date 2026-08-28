@@ -4,12 +4,15 @@ extends Control
 ## (subset applicable to this port: master volume; the game has no
 ## separate music/sfx buses yet).
 
+const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
+
 @onready var volume_slider: HSlider = $CenterContainer/VBoxContainer/VolumeRow/VolumeSlider
 @onready var volume_value_label: Label = $CenterContainer/VBoxContainer/VolumeRow/VolumeValueLabel
 @onready var back_button: Button = $CenterContainer/VBoxContainer/BackButton
 
 
 func _ready() -> void:
+	MenuBackdrop.attach(self)
 	volume_slider.value = Settings.master_volume
 	_refresh_volume_label()
 

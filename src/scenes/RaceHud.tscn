@@ -1,0 +1,36 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/hud_speedo.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://dk70ecrwxn3u" path="res://assets/ui/speedo.png" id="2_speedo"]
+
+[node name="RaceHud" type="CanvasLayer"]
+layer = 0
+
+[node name="Speedo" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -424.0
+offset_top = -136.0
+offset_right = -24.0
+offset_bottom = -36.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("1_script")
+
+[node name="Facia" type="TextureRect" parent="Speedo"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_speedo")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 1

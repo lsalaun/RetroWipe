@@ -3,11 +3,14 @@ extends Control
 ## Race class selection: src/wipeout/main_menu.c's page_race_class_init
 ## (VENOM CLASS / RAPIER CLASS).
 
+const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
+
 @onready var option_list: VBoxContainer = $CenterContainer/VBoxContainer/OptionList
 @onready var back_button: Button = $CenterContainer/VBoxContainer/BackButton
 
 
 func _ready() -> void:
+	MenuBackdrop.attach(self)
 	for i in RaceSetup.RACE_CLASSES.size():
 		var button := Button.new()
 		button.text = RaceSetup.RACE_CLASSES[i]

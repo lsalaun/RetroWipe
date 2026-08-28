@@ -3,6 +3,8 @@ extends Control
 ## Top-level menu: src/wipeout/main_menu.c's page_main_init
 ## (START GAME / OPTIONS / QUIT).
 
+const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
+
 @onready var start_button: Button = $CenterContainer/VBoxContainer/StartButton
 @onready var options_button: Button = $CenterContainer/VBoxContainer/OptionsButton
 @onready var quit_button: Button = $CenterContainer/VBoxContainer/QuitButton
@@ -10,6 +12,7 @@ extends Control
 
 
 func _ready() -> void:
+	MenuBackdrop.attach(self)
 	start_button.pressed.connect(_on_start_pressed)
 	options_button.pressed.connect(_on_options_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)

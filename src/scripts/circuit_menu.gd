@@ -4,11 +4,14 @@ extends Control
 ## reached for SINGLE RACE / TIME TRIAL; championships always start on the
 ## first circuit (see pilot_menu.gd).
 
+const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
+
 @onready var circuit_list: VBoxContainer = $CenterContainer/VBoxContainer/CircuitList
 @onready var back_button: Button = $CenterContainer/VBoxContainer/BackButton
 
 
 func _ready() -> void:
+	MenuBackdrop.attach(self)
 	for track in TrackSelection.TRACKS:
 		var button := Button.new()
 		button.text = track["name"]

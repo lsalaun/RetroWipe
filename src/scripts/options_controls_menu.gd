@@ -4,6 +4,8 @@ extends Control
 ## / button_capture. One row per rebindable action with a KEYBOARD and a
 ## JOYSTICK button; pressing either awaits the next matching input event.
 
+const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
+
 @onready var grid: GridContainer = $CenterContainer/VBoxContainer/Grid
 @onready var status_label: Label = $CenterContainer/VBoxContainer/StatusLabel
 @onready var back_button: Button = $CenterContainer/VBoxContainer/BackButton
@@ -13,6 +15,7 @@ var _capturing_is_pad: bool = false
 
 
 func _ready() -> void:
+	MenuBackdrop.attach(self)
 	_populate()
 	back_button.pressed.connect(_on_back_pressed)
 

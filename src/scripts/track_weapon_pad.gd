@@ -161,9 +161,11 @@ func _create_visual() -> void:
 
 	# Create a simple cylinder mesh to represent the pad
 	var mesh_instance = MeshInstance3D.new()
+	mesh_instance.name = "MeshInstance3D"
 	var cylinder_mesh = CylinderMesh.new()
 	cylinder_mesh.height = 0.5
-	cylinder_mesh.radius = 1.5
+	cylinder_mesh.top_radius = 1.5
+	cylinder_mesh.bottom_radius = 1.5
 	mesh_instance.mesh = cylinder_mesh
 
 	# Create material

@@ -156,7 +156,7 @@ func rebind_key(action: String, physical_keycode: int) -> void:
 func rebind_pad(action: String, button_index: int) -> void:
 	_erase_events_of_type(action, InputEventJoypadButton)
 	var event := InputEventJoypadButton.new()
-	event.button_index = button_index
+	event.button_index = button_index as JoyButton
 	InputMap.action_add_event(action, event)
 
 	var bind: Dictionary = key_binds.get(action, {"key": -1, "pad": -1})

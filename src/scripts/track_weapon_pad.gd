@@ -14,7 +14,7 @@ class_name TrackWeaponPad
 @export var weapon_class: int = 1 # WipeoutWeaponManager.WEAPON_CLASS_ANY
 @export var respawn_time: float = 5.0
 @export var pad_color: Color = Color(1.0, 0.84, 0.0)
-@export var show_visual: bool = true
+@export var show_visual: bool = false
 
 var _is_active: bool = true
 var _visual: Node3D = null

@@ -40,6 +40,9 @@ func _check_runtime() -> bool:
 	if sfx == null or music == null:
 		push_error("validate_game_audio: missing Music/Sfx players")
 		return false
+	if music.bus != "Music" or sfx.bus != "SFX":
+		push_error("validate_game_audio: players not on independent buses (music=%s sfx=%s)" % [music.bus, sfx.bus])
+		return false
 	if sfx.stream == null or sfx.stream.resource_path != SFX_SELECT:
 		push_error("validate_game_audio: select stream %s" % (sfx.stream.resource_path if sfx.stream else "null"))
 		return false

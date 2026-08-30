@@ -182,8 +182,10 @@ target_position = Vector3(0, 0, 0)
 enabled = true
 
 [node name="WallImpactSFX" type="AudioStreamPlayer3D" parent="."]
+bus = "SFX"
 
 [node name="ShipImpactSFX" type="AudioStreamPlayer3D" parent="."]
+bus = "SFX"
 
 [node name="CameraRig" type="Node3D" parent="."]
 top_level = true

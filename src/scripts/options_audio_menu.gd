@@ -1,11 +1,9 @@
 extends WipeoutMenu
 
 ## Audio options: src/wipeout/main_menu.c's page_options_audio_init, laid out
-## like the video page and stepping the volume in tens through opts_volume.
-##
-## The original has one entry for music and one for sound effects. This port
-## mixes everything through the Master bus (Settings.master_volume), so there is
-## a single MASTER VOLUME entry until music and sfx get their own buses.
+## like the video page and stepping each volume in tens through opts_volume.
+## Music and sound effects are independent entries/buses, matching
+## toggle_music_volume()/toggle_sfx_volume() exactly.
 
 const OPTIONS_MENU := "res://scenes/OptionsMenu.tscn"
 
@@ -26,9 +24,16 @@ func _build() -> void:
 	page.items_anchor = MIDDLE_CENTER
 	page.block_width = 320
 
-	var steps := clampi(roundi(Settings.master_volume * 10.0), 0, OPTS_VOLUME.size() - 1)
-	page.add_toggle(steps, "MASTER VOLUME", OPTS_VOLUME, _toggle_volume)
+	var music_steps := clampi(roundi(Settings.music_volume * 10.0), 0, OPTS_VOLUME.size() - 1)
+	page.add_toggle(music_steps, "MUSIC VOLUME", OPTS_VOLUME, _toggle_music_volume)
+
+	var sfx_steps := clampi(roundi(Settings.sfx_volume * 10.0), 0, OPTS_VOLUME.size() - 1)
+	page.add_toggle(sfx_steps, "SOUND EFFECTS VOLUME", OPTS_VOLUME, _toggle_sfx_volume)
 
 
-func _toggle_volume(data: int) -> void:
-	Settings.set_master_volume(float(data) * 0.1)
+func _toggle_music_volume(data: int) -> void:
+	Settings.set_music_volume(float(data) * 0.1)
+
+
+func _toggle_sfx_volume(data: int) -> void:
+	Settings.set_sfx_volume(float(data) * 0.1)

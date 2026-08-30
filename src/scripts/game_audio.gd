@@ -48,10 +48,12 @@ func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_music = AudioStreamPlayer.new()
 	_music.name = "Music"
+	_music.bus = "Music"
 	_music.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_music)
 	_sfx = AudioStreamPlayer.new()
 	_sfx.name = "Sfx"
+	_sfx.bus = "SFX"
 	_sfx.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_sfx)
 	_music.finished.connect(_on_music_finished)

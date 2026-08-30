@@ -61,6 +61,7 @@ func _ready() -> void:
 	add_to_group(&"race_director")
 	_voice = AudioStreamPlayer.new()
 	_voice.name = "Voice"
+	_voice.bus = "SFX"
 	add_child(_voice)
 	# main.gd spawns the AI field in its own _ready(), which Godot runs *after*
 	# this child's _ready(); defer so the whole grid is present.

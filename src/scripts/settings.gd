@@ -74,7 +74,12 @@ const REBINDABLE_ACTIONS: Array[String] = [
 var fullscreen: bool = false
 var vsync: bool = true
 var show_fps: bool = false # save.draw_stats == DRAW_STATS_FPS, read by the in-race HUD
-var master_volume: float = 1.0
+
+## save.music_volume / save.sfx_volume: independent, matching
+## page_options_audio_init()'s two toggles. Routed to the Music/SFX buses
+## _ensure_audio_buses() creates, not the Master bus (see apply_audio()).
+var music_volume: float = 0.5
+var sfx_volume: float = 0.6
 
 ## save.has_rapier_class / save.has_bonus_circuits: campaign unlocks, flipped by
 ## Championship.complete_championship() (race.c's race_next()). The shipped C
@@ -101,10 +106,26 @@ var highscores_name: String = ""
 
 
 func _ready() -> void:
+	_ensure_audio_buses()
 	_load()
 	apply_video()
 	apply_audio()
 	apply_all_key_binds()
+
+
+## Godot's default bus layout is just "Master"; add the two the original
+## mixes music and SFX through independently (sfx_stereo_mix()'s
+## `* save.music_volume` / `* save.sfx_volume`) so apply_audio() below has
+## something per-channel to drive. Runs before any AudioStreamPlayer plays
+## (Settings is ahead of GameAudio in project.godot's autoload order).
+func _ensure_audio_buses() -> void:
+	for bus_name in ["Music", "SFX"]:
+		if AudioServer.get_bus_index(bus_name) != -1:
+			continue
+		var index := AudioServer.bus_count
+		AudioServer.add_bus(index)
+		AudioServer.set_bus_name(index, bus_name)
+		AudioServer.set_bus_send(index, "Master")
 
 
 func _load() -> void:
@@ -114,7 +135,8 @@ func _load() -> void:
 	fullscreen = cfg.get_value("video", "fullscreen", fullscreen)
 	vsync = cfg.get_value("video", "vsync", vsync)
 	show_fps = cfg.get_value("video", "show_fps", show_fps)
-	master_volume = cfg.get_value("audio", "master_volume", master_volume)
+	music_volume = cfg.get_value("audio", "music_volume", music_volume)
+	sfx_volume = cfg.get_value("audio", "sfx_volume", sfx_volume)
 	has_rapier_class = cfg.get_value("progress", "has_rapier_class", has_rapier_class)
 	has_bonus_circuits = cfg.get_value("progress", "has_bonus_circuits", has_bonus_circuits)
 	highscores_name = cfg.get_value("progress", "highscores_name", highscores_name)
@@ -136,7 +158,8 @@ func save() -> void:
 	cfg.set_value("video", "fullscreen", fullscreen)
 	cfg.set_value("video", "vsync", vsync)
 	cfg.set_value("video", "show_fps", show_fps)
-	cfg.set_value("audio", "master_volume", master_volume)
+	cfg.set_value("audio", "music_volume", music_volume)
+	cfg.set_value("audio", "sfx_volume", sfx_volume)
 	cfg.set_value("progress", "has_rapier_class", has_rapier_class)
 	cfg.set_value("progress", "has_bonus_circuits", has_bonus_circuits)
 	cfg.set_value("progress", "highscores_name", highscores_name)
@@ -222,8 +245,15 @@ func apply_video() -> void:
 
 
 func apply_audio() -> void:
-	var bus_index := AudioServer.get_bus_index("Master")
-	AudioServer.set_bus_volume_db(bus_index, linear_to_db(maxf(master_volume, 0.0001)))
+	_set_bus_volume("Music", music_volume)
+	_set_bus_volume("SFX", sfx_volume)
+
+
+func _set_bus_volume(bus_name: String, volume: float) -> void:
+	var bus_index := AudioServer.get_bus_index(bus_name)
+	if bus_index == -1:
+		return
+	AudioServer.set_bus_volume_db(bus_index, linear_to_db(maxf(volume, 0.0001)))
 
 
 func set_fullscreen(value: bool) -> void:
@@ -243,8 +273,14 @@ func set_show_fps(value: bool) -> void:
 	save()
 
 
-func set_master_volume(value: float) -> void:
-	master_volume = clampf(value, 0.0, 1.0)
+func set_music_volume(value: float) -> void:
+	music_volume = clampf(value, 0.0, 1.0)
+	apply_audio()
+	save()
+
+
+func set_sfx_volume(value: float) -> void:
+	sfx_volume = clampf(value, 0.0, 1.0)
 	apply_audio()
 	save()
 

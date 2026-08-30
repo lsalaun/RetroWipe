@@ -81,7 +81,7 @@ const EXPECTED: Array[Dictionary] = [
 	{
 		"scene": "res://scenes/OptionsAudioMenu.tscn",
 		"title": "AUDIO OPTIONS",
-		"entries": ["MASTER VOLUME"],
+		"entries": ["MUSIC VOLUME", "SOUND EFFECTS VOLUME"],
 		"fixed_title": Vector2(-160, -100),
 		"fixed_items": Vector2(-160, -80),
 		"centered": false,

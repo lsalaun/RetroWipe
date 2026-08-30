@@ -93,6 +93,7 @@ func _run_checks() -> void:
 	_purge_weapons(manager)
 	_check_gates(ai_ships[0])
 	_check_immediate_fire(manager, ai_ships[0])
+	_check_no_fire_lockout(manager, player)
 	_check_damage_table(manager, ai_ships[0], player)
 	_start_delayed_fire(manager, ai_ships[1] if ai_ships.size() > 1 else ai_ships[0])
 
@@ -137,9 +138,6 @@ func _check_player_pickup_class(player: WipeoutShip) -> void:
 		return
 
 	var banned := [WipeoutWeapon.WeaponType.SHIELD, WipeoutWeapon.WeaponType.MINE]
-	# Everything here runs inside one frame, so nothing ticks the fire cooldown
-	# down between shots the way _update_weapons() would in a real race.
-	player.weapon_fire_cooldown = 0.0
 	player.fire_weapon(WipeoutWeapon.WeaponType.SHIELD)
 	if not player.has_shield():
 		_failures.append("could not raise the player's shield for the pickup check")
@@ -208,11 +206,6 @@ func _arm_for_sample(ai: WipeoutShipAI) -> void:
 	ai.fight_back = true
 	ai.is_racing = true
 	ai.shield_active = false
-	# The whole sample runs inside one frame, so _update_weapons() never gets to
-	# tick weapon_fire_cooldown down. Clearing it here is what a real race does
-	# for free: AI decisions are UPDATE_TIME_JUST_FRONT (~6.7 s) apart, five
-	# times the cooldown. Without this the shield branch reads as "never fires".
-	ai.weapon_fire_cooldown = 0.0
 
 
 ## The shield slice of the ladder fires ~600 real shields, and weapon.c caps the
@@ -297,7 +290,6 @@ func _check_gates(ai: WipeoutShipAI) -> void:
 func _check_immediate_fire(manager: Node, ai: WipeoutShipAI) -> void:
 	var before: int = manager.weapons.size()
 	ai.weapon_type = WipeoutWeapon.WeaponType.SHIELD
-	ai.weapon_fire_cooldown = 0.0
 	ai.fire_weapon(WipeoutWeapon.WeaponType.SHIELD)
 	if manager.weapons.size() <= before:
 		_failures.append("an AI shield produced no weapon in the manager")
@@ -309,6 +301,27 @@ func _check_immediate_fire(manager: Node, ai: WipeoutShipAI) -> void:
 		_failures.append("weapons_fire() must clear the AI's slot, left %d" % ai.weapon_type)
 	print("  AI immediate fire -> %s owned by %s" % [
 		WipeoutWeapon.weapon_name(weapon.weapon_type), ai.name])
+
+
+## ship_player.c:276 gates firing on the button and a loaded slot, and on nothing
+## else -- weapon.h declares WEAPON_DELAY and then never references it. So two
+## shots fired back to back, with a pad refill in between, must both leave the
+## barrel. A re-introduced cooldown would silently swallow the second, which is
+## how the port behaved before: refill fast enough and the shot was eaten.
+func _check_no_fire_lockout(manager: Node, player: WipeoutShip) -> void:
+	player.remove_shield()
+	var before: int = manager.weapons.size()
+	for i in 2:
+		player.weapon_type = WipeoutWeapon.WeaponType.ROCKET
+		player.fire_held_weapon()
+		if player.weapon_type != WipeoutWeapon.WeaponType.NONE:
+			_failures.append("shot %d never left the slot -- a fire lockout is back" % (i + 1))
+			return
+	var fired: int = manager.weapons.size() - before
+	if fired != 2:
+		_failures.append("two back-to-back shots produced %d weapon(s), expected 2" % fired)
+	else:
+		print("  two back-to-back player shots both fired, no lockout")
 
 
 ## weapon.c's per-type velocity scaling, and the SHIP_SHIELDED bypass that makes a
@@ -336,7 +349,6 @@ func _check_damage_table(manager: Node, ai: WipeoutShipAI, player: WipeoutShip) 
 	# Shielded: same bang, no slowdown.
 	var rocket := manager.fire_weapon(ai, WipeoutWeapon.WeaponType.ROCKET, player) as WipeoutWeapon
 	if rocket != null:
-		player.weapon_fire_cooldown = 0.0
 		player.fire_weapon(WipeoutWeapon.WeaponType.SHIELD)
 		if not player.has_shield():
 			_failures.append("the player could not raise a shield for the bypass check")

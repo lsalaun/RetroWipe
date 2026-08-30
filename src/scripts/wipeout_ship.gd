@@ -240,7 +240,6 @@ var ebolt_timer: float = 0.0
 var ebolt_effect_timer: float = 0.0
 var revcon_timer: float = 0.0
 var special_timer: float = 0.0
-var weapon_fire_cooldown: float = 0.0
 var _fire_requested: bool = false # latched by _process(), consumed by _update_weapons()
 
 func _ready() -> void:
@@ -1279,7 +1278,7 @@ func _wants_reset() -> bool:
 ## weapons_fire(): hand the weapon to the manager, then clear the slot
 ## (`ship->weapon_type = WEAPON_TYPE_NONE`).
 func fire_weapon(wtype: WipeoutWeapon.WeaponType, target: WipeoutShip = null) -> void:
-	if wtype == WipeoutWeapon.WeaponType.NONE or weapon_fire_cooldown > 0.0:
+	if wtype == WipeoutWeapon.WeaponType.NONE:
 		return
 
 	weapon_target = target
@@ -1287,7 +1286,6 @@ func fire_weapon(wtype: WipeoutWeapon.WeaponType, target: WipeoutShip = null) ->
 	if manager != null:
 		manager.fire_weapon(self, wtype, target)
 
-	weapon_fire_cooldown = WipeoutWeapon.WEAPON_DELAY
 	weapon_type = WipeoutWeapon.WeaponType.NONE
 
 
@@ -1379,8 +1377,6 @@ func get_random_weapon(weapon_class: int = 1) -> WipeoutWeapon.WeaponType:
 ## _physics_process(), the Godot stand-in for ship_player_update_race()'s
 ## weapon block.
 func _update_weapons(delta: float) -> void:
-	weapon_fire_cooldown = maxf(weapon_fire_cooldown - delta, 0.0)
-
 	if shield_active:
 		shield_timer -= delta
 		if shield_timer <= 0.0:

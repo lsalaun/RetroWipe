@@ -123,7 +123,6 @@ func _run_checks() -> void:
 	# 5b. The shield bubble must stay see-through, or it hides the ship it is
 	# protecting (weapon_update_shield draws it at alpha 48/255).
 	player.weapon_type = WipeoutWeapon.WeaponType.SHIELD
-	player.weapon_fire_cooldown = 0.0
 	player.fire_held_weapon()
 	var shield: WipeoutWeapon = null
 	for w in manager.weapons:
@@ -143,7 +142,6 @@ func _run_checks() -> void:
 
 	# 6. Firing spends the slot and puts a weapon in the scene.
 	player.weapon_type = WipeoutWeapon.WeaponType.ROCKET
-	player.weapon_fire_cooldown = 0.0
 	player.fire_held_weapon()
 	if player.weapon_type != WipeoutWeapon.WeaponType.NONE:
 		_failures.append("firing did not clear the weapon slot")

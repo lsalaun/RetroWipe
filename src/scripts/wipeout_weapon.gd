@@ -33,6 +33,10 @@ const EBOLT_DURATION = 140.0 / 30.0
 const MISSILE_DURATION = 200.0 / 30.0
 const SHIELD_DURATION = 200.0 / 30.0
 const MINE_RELEASE_RATE = 3.0 / 30.0
+## Mirrors weapon.h's #define, which the original declares and then never
+## references anywhere: nothing in the C gates firing on a delay. Kept only so
+## the constant table matches the header -- wiring it into fire_weapon() adds a
+## lockout the original does not have, which is exactly what was removed here.
 const WEAPON_DELAY = 40.0 / 30.0
 const MINE_COUNT = 5
 const AI_DELAY = 1.1

@@ -64,7 +64,15 @@ const EXPECTED: Array[Dictionary] = [
 	{
 		"scene": "res://scenes/OptionsMenu.tscn",
 		"title": "OPTIONS",
-		"entries": ["CONTROLS", "VIDEO", "AUDIO"],
+		"entries": ["CONTROLS", "VIDEO", "AUDIO", "BEST TIMES"],
+		"fixed_title": Vector2(0, 30),
+		"fixed_items": Vector2(0, -110),
+		"centered": true,
+	},
+	{
+		"scene": "res://scenes/OptionsBestTimesMenu.tscn",
+		"title": "VIEW BEST TIMES",
+		"entries": ["TIME TRIAL TIMES", "RACE TIMES"],
 		"fixed_title": Vector2(0, 30),
 		"fixed_items": Vector2(0, -110),
 		"centered": true,

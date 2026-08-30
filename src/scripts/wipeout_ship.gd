@@ -53,6 +53,12 @@ const NEUTRAL_INPUTS := {
 @export var thrust_max: float = 72.0
 @export var thrust_ramp: float = 42.0
 @export var thrust_falloff: float = 20.0 # original ramps thrust down at half the ramp-up rate (SHIP_THRUST_FALLOFF = SHIP_THRUST_RATE / 2)
+@export var engine_flame_idle_length: float = 0.5 # ship.c's exhaust_len never fully collapses to zero; a small idle plume remains even at rest
+@export var engine_flame_max_length: float = 2.6 # additional length at full thrust_mag, ported ratio of ship.c's `thrust_mag * 0.0625` term
+@export var engine_flame_speed_length: float = 1.4 # additional length from current speed, ported ratio of ship.c's `speed * 0.00390625` term
+@export var engine_flame_speed_reference: float = 90.0 # speed (m/s) at which the speed-based stretch term reaches its full contribution
+@export var engine_flame_jitter: float = 0.15 # ported from ship.c's per-frame vec3_rand(7) plume jitter
+@export var engine_flame_glow_energy: float = 1.4 # peak OmniLight3D energy per nozzle at full thrust/speed, for a subtle light bounce onto the track under the ship
 @export var resistance: float = 1.2 # ported from ship_player.c global drag: per-ship multiplier on acceleration -= velocity / resistance
 @export var max_resistance: float = 18.0 # velocity drag baseline, ported from SHIP_MAX_RESISTANCE (used identically on ground and in the air)
 @export var min_resistance: float = 6.5 # air grip divisor baseline, ported from SHIP_MIN_RESISTANCE: how strongly airborne velocity is pulled toward the forward axis
@@ -116,6 +122,12 @@ const NEUTRAL_INPUTS := {
 @onready var camera_rig: Node3D = $CameraRig
 @onready var hull_area: Area3D = $HullArea
 @onready var ship_visual: Node3D = $ShipVisual
+## Each is a Node3D anchored at its nozzle (see convert_ships.py-imported model
+## measurements in the tscn transform), wrapping an Outer/Inner MeshInstance3D
+## pair plus a Glow OmniLight3D -- scaling/repositioning the parent moves and
+## stretches both mesh layers together.
+@onready var engine_flames: Array[Node3D] = [$EngineFlameLeft, $EngineFlameRight]
+@onready var engine_glow_lights: Array[OmniLight3D] = [$EngineFlameLeft/Glow, $EngineFlameRight/Glow]
 
 var thrust_mag: float = 0.0
 var reverse_brake: float = 0.0
@@ -155,6 +167,7 @@ var _last_line_distance: float = 0.0 # signed distance to the start line on the 
 var _track_right_dir: Vector3 = Vector3.RIGHT # across-lane axis from the nearest center-line tangent and racing-surface normal
 var _track_floor_normal: Vector3 = Vector3.UP # racing-surface normal under the center line; steep floors stay aligned with this, edge shelves do not
 var _track_center_point: Vector3 = Vector3.ZERO # nearest racing-line sample; void checks drop against this Y, not the last crest
+var _engine_flame_base_z: float = 0.0 # EngineFlame nozzles' authored position.z, i.e. the world-space z of their near-hull (fixed) end at scale 1.0
 
 # Weapon Attributes (ported from ship.c)
 var weapon_type: WipeoutWeapon.WeaponType = WipeoutWeapon.WeaponType.NONE
@@ -180,6 +193,8 @@ func _ready() -> void:
 		set_ship_model(ship_model_scene)
 	if hull_area != null:
 		hull_area.area_entered.connect(_on_hull_area_entered)
+	if not engine_flames.is_empty() and engine_flames[0] != null:
+		_engine_flame_base_z = engine_flames[0].position.z
 
 
 ## Godot-idiomatic stand-in for ship.c's `last_impact_time`-gated `sfx_play_at()`:
@@ -305,6 +320,7 @@ func _physics_process(delta: float) -> void:
 	_resolve_hull_penetration(delta)
 	_update_orientation(hover, up, pitch_input, grounded, delta)
 	_update_visuals(steer, pitch_input, grounded, delta)
+	_update_engine_flame()
 	if is_player_controlled:
 		_update_camera(delta)
 
@@ -691,6 +707,32 @@ func _update_visuals(steer: float, pitch_input: float, grounded: bool, delta: fl
 	visual_roll = clampf(visual_roll + roll_rate * delta, -0.75, 0.75)
 	visual_pitch = lerpf(visual_pitch, target_pitch, minf(1.0, 4.0 * delta))
 	body_mesh.rotation = Vector3(visual_pitch, 0.0, visual_roll)
+
+
+## Ported from ship.c's exhaust plume stretch (thrust_mag/speed-driven vertex
+## offset + per-frame jitter), reimplemented as a pair of layered cone meshes
+## per nozzle (a bright inner core + a softer outer haze, since the imported
+## ship GLBs don't carry PRM_SHIP_ENGINE-tagged geometry to animate) at the
+## two engine positions measured off the real ship models, instead of one
+## centered plume.
+func _update_engine_flame() -> void:
+	if engine_flames.is_empty():
+		return
+	var thrust_ratio := (thrust_mag / thrust_max) if thrust_max > 0.0 else 0.0
+	var speed_ratio := clampf(velocity.length() / engine_flame_speed_reference, 0.0, 1.0)
+	var length := engine_flame_idle_length + thrust_ratio * engine_flame_max_length + speed_ratio * engine_flame_speed_length
+	var glow_energy := engine_flame_glow_energy * (0.15 + 0.85 * maxf(thrust_ratio, speed_ratio))
+	for i in engine_flames.size():
+		var engine_flame := engine_flames[i]
+		if engine_flame == null:
+			continue
+		var jittered_length := length * randf_range(1.0 - engine_flame_jitter, 1.0 + engine_flame_jitter)
+		jittered_length = maxf(jittered_length, 0.05)
+		var jittered_width := randf_range(1.0 - engine_flame_jitter * 0.5, 1.0 + engine_flame_jitter * 0.5)
+		engine_flame.scale = Vector3(jittered_width, jittered_length, jittered_width)
+		engine_flame.position.z = _engine_flame_base_z - 0.5 + 0.5 * jittered_length
+		if i < engine_glow_lights.size() and engine_glow_lights[i] != null:
+			engine_glow_lights[i].light_energy = glow_energy * randf_range(0.85, 1.15)
 
 
 ## Ported from camera.c's camera_update_race_external(): the camera's raw chase

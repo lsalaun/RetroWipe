@@ -32,6 +32,11 @@ const MIDDLE_CENTER := Vector2(0.5, 0.5)
 ## frame 9 (ui.c's ui_load), a 12x12 icon.
 const STAR_ICON := "res://assets/ui/drfonts/drfonts_09.png"
 
+## hud_draw_target_icon()'s target2.tim, a 16x16 semi-transparent reticle, drawn
+## at rgba(128,128,128,128) -- full brightness at half alpha.
+const RETICLE_ICON := "res://assets/ui/target2.png"
+const RETICLE_COLOR := Color(1.0, 1.0, 1.0, 128.0 / 255.0)
+
 ## hud.c: render_push_2d() draws the WICONS sprite into a fixed 32x32
 ## (ui-scaled) box regardless of the source frame's own size.
 const WEAPON_ICON_SIZE := 32.0
@@ -77,6 +82,8 @@ func _draw() -> void:
 	_draw_stats()
 	_draw_wrong_way()
 	_draw_countdown()
+	# hud_draw() puts the reticle last, over everything else it drew.
+	_draw_target_reticle()
 
 
 ## hud.c: current lap time bottom-left, with the already-banked laps stacked
@@ -165,6 +172,49 @@ func _draw_lives() -> void:
 	for i in Championship.lives:
 		var top_left := _at(Vector2(-26.0 - 13.0 * float(i), -50.0), BOTTOM_RIGHT)
 		draw_texture_rect(texture, Rect2(top_left, icon_size * HUD_SCALE), false, DEFAULT)
+
+
+## hud_draw_target_icon(): where the locked-on ship's world position lands on
+## screen, or null when the original's bounds check would have dropped it --
+## behind the camera (projected.z >= 1) or outside the NDC square. Godot's
+## unproject_position() already yields pixels, so the [-1,1] test becomes a
+## plain viewport-rect test. Split out of the draw so the culling is assertable.
+func target_reticle_position() -> Variant:
+	if _ship == null or _ship.weapon_target == null or not is_instance_valid(_ship.weapon_target):
+		return null
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return null
+	var target_position: Vector3 = _ship.weapon_target.global_position
+	if camera.is_position_behind(target_position):
+		return null
+	# Tested against the viewport, which is what the original's render_size() is,
+	# rather than this Control's own size: unproject_position() returns viewport
+	# coordinates, and the two only coincide once the full-rect Control has been
+	# laid out (it has not been under --script, where size is still zero).
+	var point := camera.unproject_position(target_position)
+	if not get_viewport_rect().has_point(point):
+		return null
+	return point
+
+
+func _draw_target_reticle() -> void:
+	var point = target_reticle_position()
+	if point == null:
+		return
+	var texture := _reticle_icon()
+	if texture == null:
+		return
+	# ui_scaled(render_texture_size(...)): the icon's own size, ui-scaled, and
+	# centred on the projected point.
+	var icon_size := Vector2(texture.get_width(), texture.get_height()) * HUD_SCALE
+	draw_texture_rect(texture, Rect2(point - icon_size * 0.5, icon_size), false, RETICLE_COLOR)
+
+
+func _reticle_icon() -> Texture2D:
+	if not _icon_cache.has(RETICLE_ICON):
+		_icon_cache[RETICLE_ICON] = load(RETICLE_ICON) as Texture2D if ResourceLoader.exists(RETICLE_ICON) else null
+	return _icon_cache[RETICLE_ICON]
 
 
 func _star_icon() -> Texture2D:

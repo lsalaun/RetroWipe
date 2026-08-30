@@ -1370,10 +1370,26 @@ func _update_weapons(delta: float) -> void:
 			ebolt_effect_timer -= 0.1
 			_apply_electro_jolt()
 
+	_update_weapon_target()
+
 	if _fire_requested:
 		_fire_requested = false
 		if is_player_controlled and race_control_enabled:
 			fire_held_weapon()
+
+
+## ship_player_update_race(): the lock on the ship ahead is re-taken every frame
+## while the player holds one of the two homing weapons, and dropped for
+## anything else -- that live target is what the HUD reticle tracks, so setting
+## it only at fire time (as this port used to) meant there was never a lock to
+## draw while aiming.
+func _update_weapon_target() -> void:
+	if not is_player_controlled:
+		return
+	if weapon_type == WipeoutWeapon.WeaponType.MISSILE or weapon_type == WipeoutWeapon.WeaponType.EBOLT:
+		weapon_target = _acquire_weapon_target()
+	else:
+		weapon_target = null
 
 
 ## The press is latched in _process(), not polled in _physics_process(): a physics

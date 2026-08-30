@@ -102,6 +102,7 @@ func _physics_process(_delta: float) -> bool:
 	_check_championship_without_qualifying()
 	_check_championship_completed()
 	_check_pause_game_over_releases_control()
+	_check_weapon_target_lock()
 
 	_settings.lap_records = _orig_lap_records
 	_settings.race_records = _orig_race_records
@@ -241,6 +242,63 @@ func _check_pause_game_over_releases_control() -> void:
 	_check("the HUD keeps processing while paused", hud != null and hud.process_mode == Node.PROCESS_MODE_ALWAYS)
 
 	paused = false
+
+
+## ship_player_update_race() re-takes the lock on the ship ahead every frame
+## while the player holds a homing weapon, and clears it otherwise. That live
+## target is what the HUD reticle follows, so a lock taken only at fire time
+## would leave nothing to draw while aiming.
+func _check_weapon_target_lock() -> void:
+	var player: Node = _director.player
+	player.is_racing = true
+	player.race_control_enabled = true
+
+	player.weapon_type = WipeoutWeapon.WeaponType.MISSILE
+	player._update_weapon_target()
+	_check("holding a missile takes a target lock", player.weapon_target != null)
+
+	player.weapon_type = WipeoutWeapon.WeaponType.EBOLT
+	player._update_weapon_target()
+	_check("holding an e-bolt takes a target lock", player.weapon_target != null)
+
+	# The original locks on for exactly those two; everything else clears it.
+	player.weapon_type = WipeoutWeapon.WeaponType.ROCKET
+	player._update_weapon_target()
+	_check("a rocket takes no lock (it does not home)", player.weapon_target == null)
+
+	player.weapon_type = WipeoutWeapon.WeaponType.MISSILE
+	player._update_weapon_target()
+	player.weapon_type = WipeoutWeapon.WeaponType.NONE
+	player._update_weapon_target()
+	_check("an empty slot drops the lock", player.weapon_target == null)
+
+	# With no lock there is nothing for the HUD to project.
+	var hud := _main.find_child("Hud", true, false)
+	if hud == null:
+		_check("main.tscn has a Hud", false)
+		return
+	# The HUD caches the player ship in _process(), which the bare SceneTree
+	# under --script never ticks; prime it by hand or every lookup below sees a
+	# null ship and reports no reticle for the wrong reason.
+	hud._process(0.0)
+	_check("the HUD resolved the player ship", hud._ship == player)
+	_check("no lock means no reticle", hud.target_reticle_position() == null)
+
+	# And with a lock the camera can actually see, it has to resolve to a screen
+	# point -- otherwise the reticle would never be drawn at all.
+	player.weapon_type = WipeoutWeapon.WeaponType.MISSILE
+	player._update_weapon_target()
+	var camera := hud.get_viewport().get_camera_3d()
+	if player.weapon_target == null or camera == null:
+		_check("a locked target and a camera are available to project with", false)
+		return
+	# Park the target straight ahead so neither bounds check can drop it.
+	player.weapon_target.global_position = camera.global_position - camera.global_transform.basis.z * 40.0
+	_check("a lock in front of the camera projects to a screen point", hud.target_reticle_position() is Vector2)
+
+	# Behind the camera it must be culled, as projected.z >= 1 does originally.
+	player.weapon_target.global_position = camera.global_position + camera.global_transform.basis.z * 40.0
+	_check("a target behind the camera is culled", hud.target_reticle_position() == null)
 
 
 ## Crosses the line on the last lap with the given per-lap times and rank, the

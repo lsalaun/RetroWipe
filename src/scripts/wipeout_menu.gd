@@ -29,6 +29,11 @@ const BOTTOM_CENTER := Vector2(0.5, 1.0)
 ## menu.c advances items_pos.y by 12 per entry.
 const ITEM_STEP := 12.0
 
+## Uniform multiplier applied to every menu's model/logo preview size in
+## _draw_model_preview() below -- the single place to resize the spinning
+## ship/icon previews across every menu screen at once.
+const MODEL_PREVIEW_SCALE := 4.0
+
 
 class Entry:
 	const BUTTON := 0
@@ -300,8 +305,9 @@ func _add_model_preview() -> MenuModelPreview:
 func _draw_model_preview(preview: MenuModelPreview, anchor: Vector2, pos: Vector2, preview_size: Vector2, scale: float) -> void:
 	if preview == null:
 		return
-	var top_left := _anchored(anchor, pos - preview_size * 0.5, scale)
-	draw_texture_rect(preview.get_texture(), Rect2(top_left, preview_size * scale), false)
+	var scaled_size := preview_size * MODEL_PREVIEW_SCALE
+	var top_left := _anchored(anchor, pos - scaled_size * 0.5, scale)
+	draw_texture_rect(preview.get_texture(), Rect2(top_left, scaled_size * scale), false)
 
 
 func _text(text: String, anchor: Vector2, offset: Vector2, size: int, color: Color, scale: float) -> void:

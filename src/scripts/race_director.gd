@@ -159,7 +159,11 @@ func _end_race() -> void:
 			best = lap
 
 	var record := Settings.get_lap_record(_circuit_name(), RaceSetup.race_class, _is_time_trial())
-	var is_new_record := Settings.submit_lap_record(_circuit_name(), RaceSetup.race_class, _is_time_trial(), best)
+	var is_new_lap_record := Settings.submit_lap_record(_circuit_name(), RaceSetup.race_class, _is_time_trial(), best)
+	# race_end()'s is_new_race_record: a *peek*, not an insert -- the actual
+	# save.highscores insert only happens once the hall-of-fame name entry
+	# completes (see race_results.gd), same as the C.
+	var is_new_race_record := Settings.is_new_race_record(_circuit_name(), RaceSetup.race_class, _is_time_trial(), total)
 
 	stats = {
 		"position": player.position_rank,
@@ -167,7 +171,8 @@ func _end_race() -> void:
 		"race_time": total,
 		"best_lap": best,
 		"qualified": player.position_rank <= QUALIFYING_RANK,
-		"is_new_lap_record": is_new_record,
+		"is_new_lap_record": is_new_lap_record,
+		"is_new_race_record": is_new_race_record,
 		"lap_record": record,
 	}
 

@@ -1,16 +1,11 @@
 extends Control
 
 ## End-of-race flow, ported from src/wipeout/ingame_menus.c's
-## race_stats_menu_init() / page_race_stats_draw(), and, for championship
-## races, button_race_stats_continue()'s qualify-or-quit confirm,
-## page_race_points_draw(), page_championship_points_draw() and
+## race_stats_menu_init() / page_race_stats_draw(), button_race_stats_continue()'s
+## qualify-or-quit confirm, page_race_points_draw(), page_championship_points_draw(),
+## page_hall_of_fame_draw() (name entry for a new race-time record) and
 ## race.c's race_restart() (lives) / race_next() (circuit chaining, class and
 ## bonus-circuit unlocks, congratulations text).
-##
-## Hall-of-fame name entry is the one branch still not ported: every place the
-## original would detour there because of a new race record just falls
-## through to the next screen instead, same as before this file learned about
-## championships.
 
 const HUD_SCALE := 3.125 # same virtual-unit scale as race_hud.gd
 
@@ -29,6 +24,21 @@ const BODY_OFFSET := Vector2(-140, -68)
 ## speed in the same virtual units HUD_SCALE turns into pixels.
 const SCROLL_SPEED := 32.0
 
+## page_hall_of_fame_draw()'s table: title_pos + (-120, 48), one row per
+## Settings.NUM_HIGHSCORES entry, time column 120 units right of the name.
+const HOF_BODY_OFFSET := Vector2(-120.0, -52.0)
+const HOF_ROW_STEP := 24.0
+const HOF_TIME_COLUMN := 120.0
+
+## hs_charset "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", plus DEL (36) and END (37).
+const HOF_CHARSET := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const HOF_DEL_INDEX := 36
+const HOF_END_INDEX := 37
+## drfonts.cmp frames 7/8 (ui.c's UI_ICON_END/UI_ICON_DEL), already exported
+## alongside the three DRFONTS font atlases.
+const HOF_END_ICON := "res://assets/ui/drfonts/drfonts_07.png"
+const HOF_DEL_ICON := "res://assets/ui/drfonts/drfonts_08.png"
+
 enum Stage {
 	STATS,
 	RACE_POINTS,
@@ -36,6 +46,8 @@ enum Stage {
 	QUALIFY_OR_QUIT,
 	GAME_OVER,
 	CONGRATULATIONS,
+	HALL_OF_FAME,
+	RESTART_OR_QUIT,
 }
 
 @onready var buttons: VBoxContainer = $Buttons
@@ -45,6 +57,13 @@ var _stats: Dictionary = {}
 var _portrait: Texture2D = null
 var _congratulations_lines: Array[String] = []
 var _congratulations_start_msec: int = 0
+
+## Hall-of-fame name-entry state (hs_new_entry / hs_char_index in ingame_menus.c).
+var _hof_name := ""
+var _hof_char_index := 0
+var _hof_time := 0.0
+var _hof_entries: Array = []
+var _hof_icon_cache: Dictionary = {}
 
 
 func _ready() -> void:
@@ -72,17 +91,17 @@ func _is_championship() -> bool:
 	return RaceSetup.race_type == RaceSetup.RACE_TYPE_CHAMPIONSHIP
 
 
+func _is_time_trial() -> bool:
+	return RaceSetup.race_type == RaceSetup.RACE_TYPE_TIME_TRIAL
+
+
 ## menu_reset() + the page_*_init() for whichever screen comes next.
 func _show_stage(stage: int) -> void:
 	_stage = stage
 	_clear_buttons()
 	match stage:
 		Stage.STATS:
-			if _is_championship():
-				_add_button("CONTINUE", _on_stats_continue)
-			else:
-				_add_button("RESTART RACE", _on_restart_pressed)
-				_add_button("QUIT TO MENU", _on_quit_pressed)
+			_add_button("CONTINUE", _on_stats_continue)
 		Stage.RACE_POINTS:
 			_add_button("CONTINUE", _on_race_points_continue)
 		Stage.CHAMPIONSHIP_TABLE:
@@ -95,6 +114,16 @@ func _show_stage(stage: int) -> void:
 		Stage.CONGRATULATIONS:
 			_congratulations_start_msec = Time.get_ticks_msec()
 			_add_button("CONTINUE", _on_quit_pressed)
+		Stage.HALL_OF_FAME:
+			# page_hall_of_fame_init() adds no menu_page_add_button(): input is
+			# read directly (see _unhandled_input()), not through a button list.
+			_hof_name = Settings.highscores_name
+			_hof_char_index = 0
+			_hof_time = float(_stats.get("race_time", 0.0))
+			_hof_entries = Settings.get_race_records(RaceField.track_display_name(), RaceSetup.race_class, _is_time_trial())
+		Stage.RESTART_OR_QUIT:
+			_add_button("RESTART RACE", _on_restart_pressed)
+			_add_button("QUIT TO MENU", _on_quit_pressed)
 	GameAudio.hook_menu(self)
 	queue_redraw()
 
@@ -117,13 +146,20 @@ func _add_button(text: String, callback: Callable) -> void:
 # -----------------------------------------------------------------------------
 # Stage transitions
 
-## button_race_stats_continue(): qualifying opens RACE POINTS; failing opens
-## the "CONTINUE QUALIFYING OR QUIT" confirm instead.
+## button_race_stats_continue(): championships branch on qualifying (RACE
+## POINTS vs. the qualify-or-quit confirm); single race/time trial detour to
+## HALL OF FAME on a new race-time record, same as the confirm-restart choice
+## they would otherwise go straight to.
 func _on_stats_continue() -> void:
-	if bool(_stats.get("qualified", false)):
-		_show_stage(Stage.RACE_POINTS)
+	if _is_championship():
+		if bool(_stats.get("qualified", false)):
+			_show_stage(Stage.RACE_POINTS)
+		else:
+			_show_stage(Stage.QUALIFY_OR_QUIT)
+	elif bool(_stats.get("is_new_race_record", false)):
+		_show_stage(Stage.HALL_OF_FAME)
 	else:
-		_show_stage(Stage.QUALIFY_OR_QUIT)
+		_show_stage(Stage.RESTART_OR_QUIT)
 
 
 ## button_race_points_continue().
@@ -131,8 +167,19 @@ func _on_race_points_continue() -> void:
 	_show_stage(Stage.CHAMPIONSHIP_TABLE)
 
 
-## button_championship_points_continue() + race_next().
+## button_championship_points_continue(): a new race-time record still takes
+## priority over continuing the campaign.
 func _on_championship_table_continue() -> void:
+	if bool(_stats.get("is_new_race_record", false)):
+		_show_stage(Stage.HALL_OF_FAME)
+	else:
+		_continue_championship()
+
+
+## race_next(), shared by button_championship_points_continue() and
+## page_hall_of_fame_draw()'s hs_entry_complete branch (both call race_next()
+## once there is no hall-of-fame detour left to take).
+func _continue_championship() -> void:
 	if Championship.is_championship_complete():
 		_congratulations_lines = Championship.complete_championship(RaceSetup.race_class)
 		_show_stage(Stage.CONGRATULATIONS)
@@ -148,6 +195,72 @@ func _on_qualify_pressed() -> void:
 		_show_stage(Stage.GAME_OVER)
 	else:
 		_on_restart_pressed()
+
+
+# -----------------------------------------------------------------------------
+# Hall of fame name entry
+
+## hall_of_fame_draw_name_entry()'s per-frame bounds recompute: c_first/c_last,
+## as the [lo, hi) range wrap_around() cycles hs_char_index through. An empty
+## name excludes END (must type at least one character); a full one excludes
+## every letter (only DEL/END remain reachable).
+func _hof_bounds() -> Vector2i:
+	var entry_len := _hof_name.length()
+	if entry_len == 0:
+		return Vector2i(0, HOF_END_INDEX)
+	if entry_len >= 3:
+		return Vector2i(HOF_DEL_INDEX, HOF_END_INDEX + 1)
+	return Vector2i(0, HOF_END_INDEX + 1)
+
+
+func _wrap(value: int, lo: int, hi: int) -> int:
+	return lo + posmod(value - lo, hi - lo)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_visible_in_tree() or _stage != Stage.HALL_OF_FAME:
+		return
+	if event.is_action_pressed("ui_up"):
+		get_viewport().set_input_as_handled()
+		_hof_char_index += 1
+		queue_redraw()
+	elif event.is_action_pressed("ui_down"):
+		get_viewport().set_input_as_handled()
+		_hof_char_index -= 1
+		queue_redraw()
+	elif event.is_action_pressed("ui_accept"):
+		get_viewport().set_input_as_handled()
+		_hof_confirm()
+		queue_redraw()
+
+
+## A_MENU_SELECT / A_MENU_START on the current wheel position: DEL erases the
+## last character, END finalises the entry, anything else appends the letter.
+func _hof_confirm() -> void:
+	var bounds := _hof_bounds()
+	_hof_char_index = _wrap(_hof_char_index, bounds.x, bounds.y)
+	if _hof_char_index == HOF_DEL_INDEX:
+		GameAudio.play_select()
+		if _hof_name.length() > 0:
+			_hof_name = _hof_name.substr(0, _hof_name.length() - 1)
+	elif _hof_char_index == HOF_END_INDEX:
+		_hof_finish()
+	else:
+		GameAudio.play_select()
+		_hof_name += HOF_CHARSET[_hof_char_index]
+
+
+## page_hall_of_fame_draw()'s hs_entry_complete branch: persist the name and
+## the record, then either continue the campaign or fall back to the ordinary
+## restart/quit choice.
+func _hof_finish() -> void:
+	GameAudio.play_select()
+	Settings.set_highscores_name(_hof_name)
+	Settings.submit_race_record(RaceField.track_display_name(), RaceSetup.race_class, _is_time_trial(), _hof_name, _hof_time)
+	if _is_championship():
+		_continue_championship()
+	else:
+		_show_stage(Stage.RESTART_OR_QUIT)
 
 
 func _load_next_circuit() -> void:
@@ -192,6 +305,12 @@ func _draw() -> void:
 			WipeoutUI.draw_text_centered(self, "GAME OVER", _at(TITLE_OFFSET), SIZE_16, ACCENT, HUD_SCALE)
 		Stage.CONGRATULATIONS:
 			_draw_congratulations()
+		Stage.HALL_OF_FAME:
+			_draw_hall_of_fame()
+		Stage.RESTART_OR_QUIT:
+			# menu_confirm(menu, "", "RESTART RACE", "RESTART", "QUIT", ...):
+			# empty title, "RESTART RACE" as the (default-coloured) subtitle.
+			WipeoutUI.draw_text_centered(self, "RESTART RACE", _at(TITLE_OFFSET), SIZE_8, DEFAULT, HUD_SCALE)
 
 
 func _draw_stats() -> void:
@@ -238,8 +357,10 @@ func _draw_stats() -> void:
 	WipeoutUI.draw_time(self, float(_stats.get("best_lap", 0.0)), _at(Vector2(pos.x + 8, pos.y)), SIZE_8, DEFAULT, HUD_SCALE)
 	pos.y += 12
 
-	# Not in page_race_stats_draw(): the original announces a new lap record on
-	# the hall-of-fame page that follows, which is not ported.
+	# Not in page_race_stats_draw(): g.is_new_lap_record is set in race_end()
+	# but the original UI never actually reads it anywhere (race.c sets it,
+	# ingame_menus.c never checks it), so there is no original placement to
+	# match here either. Kept as a small addition beyond the source game.
 	if bool(_stats.get("is_new_lap_record", false)):
 		WipeoutUI.draw_text(self, "NEW LAP RECORD", _at(pos), SIZE_8, ACCENT, HUD_SCALE)
 
@@ -262,6 +383,55 @@ func _draw_points_table(title: String, rows: Array[Dictionary]) -> void:
 		var w := WipeoutUI.text_width(points_text, SIZE_8)
 		WipeoutUI.draw_text(self, points_text, _at(Vector2(pos.x + 280 - w, pos.y)), SIZE_8, color, HUD_SCALE)
 		pos.y += 12
+
+
+## page_hall_of_fame_draw(): splices the still-being-typed entry into the
+## sorted top-Settings.NUM_HIGHSCORES list at the row it would occupy once
+## submitted, without touching the stored records until _hof_finish().
+func _draw_hall_of_fame() -> void:
+	WipeoutUI.draw_text_centered(self, "HALL OF FAME", _at(TITLE_OFFSET), SIZE_16, ACCENT, HUD_SCALE)
+
+	var bounds := _hof_bounds()
+	_hof_char_index = _wrap(_hof_char_index, bounds.x, bounds.y)
+
+	var pos := HOF_BODY_OFFSET
+	var entries_index := 0
+	var inserted := false
+	for _row in Settings.NUM_HIGHSCORES:
+		if not inserted and entries_index < _hof_entries.size() and _hof_time < float(_hof_entries[entries_index]["time"]):
+			_draw_hof_name_entry(pos)
+			inserted = true
+		else:
+			var entry: Dictionary = _hof_entries[entries_index]
+			WipeoutUI.draw_text(self, str(entry.get("name", "")), _at(pos), SIZE_16, DEFAULT, HUD_SCALE)
+			WipeoutUI.draw_time(self, float(entry.get("time", 0.0)), _at(Vector2(pos.x + HOF_TIME_COLUMN, pos.y)), SIZE_16, DEFAULT, HUD_SCALE)
+			entries_index += 1
+		pos.y += HOF_ROW_STEP
+
+
+## hall_of_fame_draw_name_entry(): the name typed so far, then either the
+## DEL/END icon or the currently-selected letter, right after it -- a rotating
+## cursor showing what A_MENU_SELECT would do next.
+func _draw_hof_name_entry(pos: Vector2) -> void:
+	WipeoutUI.draw_text(self, _hof_name, _at(pos), SIZE_16, ACCENT, HUD_SCALE)
+	var cursor_pos := Vector2(pos.x + WipeoutUI.text_width(_hof_name, SIZE_16), pos.y)
+	if _hof_char_index == HOF_DEL_INDEX:
+		_draw_icon(HOF_DEL_ICON, cursor_pos)
+	elif _hof_char_index == HOF_END_INDEX:
+		_draw_icon(HOF_END_ICON, cursor_pos)
+	else:
+		WipeoutUI.draw_text(self, HOF_CHARSET[_hof_char_index], _at(cursor_pos), SIZE_16, ACCENT, HUD_SCALE)
+	WipeoutUI.draw_time(self, _hof_time, _at(Vector2(pos.x + HOF_TIME_COLUMN, pos.y)), SIZE_16, DEFAULT, HUD_SCALE)
+
+
+func _draw_icon(path: String, pos: Vector2) -> void:
+	if not _hof_icon_cache.has(path):
+		_hof_icon_cache[path] = load(path) as Texture2D if ResourceLoader.exists(path) else null
+	var texture: Texture2D = _hof_icon_cache[path]
+	if texture == null:
+		return
+	var rect := Rect2(_at(pos), Vector2(texture.get_width(), texture.get_height()) * HUD_SCALE)
+	draw_texture_rect(texture, rect, false, ACCENT)
 
 
 ## text_scroll_menu_draw(): the line list scrolls up from the bottom of the

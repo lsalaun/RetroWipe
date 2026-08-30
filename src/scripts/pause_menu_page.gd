@@ -14,6 +14,15 @@ func _wants_backdrop() -> bool:
 	return false
 
 
+## race.c race_update() puts a half-alpha black quad behind *every* in-race menu
+## -- pause, race stats, game over -- and only skips it for the congratulations
+## crawl (menu_is_scroll_text). race_results.gd already does this for the
+## post-race pages; this is the same quad for the pause stack.
+func _draw() -> void:
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.0, 0.0, 0.0, 0.5))
+	super._draw()
+
+
 func _build() -> void:
 	var page := push_page("PAUSED")
 	page.add_button(0, "CONTINUE", _continue)

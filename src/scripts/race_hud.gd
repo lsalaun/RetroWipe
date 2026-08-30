@@ -45,6 +45,12 @@ var _icon_cache: Dictionary = {}
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# race.c gates only the game logic on is_paused; the frame is still drawn, so
+	# the HUD stays live behind the pause menu the way it does in the original --
+	# and, more importantly, still notices race_release_control() clearing
+	# SHIP_RACING while the tree is paused, which is what makes it disappear on
+	# GAME OVER instead of freezing on the last pre-pause frame.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
 func _process(_delta: float) -> void:

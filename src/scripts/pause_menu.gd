@@ -58,6 +58,13 @@ func resume() -> void:
 ## game_over_menu_init() instead of reloading the circuit.
 func restart_race() -> void:
 	if RaceSetup.race_type == RaceSetup.RACE_TYPE_CHAMPIONSHIP and Championship.lose_life():
+		# race_restart() runs race_release_control() before game_over_menu_init(),
+		# which is what clears SHIP_RACING and so takes the HUD down with it.
+		# Looked up untyped: naming RaceDirector here would pull race_director.gd
+		# into this script's compilation ahead of the autoloads it uses.
+		var director := get_tree().get_first_node_in_group(&"race_director")
+		if director != null:
+			director.release_control()
 		menu.show_game_over()
 		return
 	get_tree().paused = false

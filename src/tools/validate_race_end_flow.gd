@@ -101,6 +101,7 @@ func _physics_process(_delta: float) -> bool:
 	_check_championship_with_record()
 	_check_championship_without_qualifying()
 	_check_championship_completed()
+	_check_pause_game_over_releases_control()
 
 	_settings.lap_records = _orig_lap_records
 	_settings.race_records = _orig_race_records
@@ -207,6 +208,39 @@ func _check_championship_completed() -> void:
 	_check("the crawl is loaded with the venom ending", _results._congratulations_lines == _championship.CONGRATULATIONS_VENOM)
 	_check("finishing the venom campaign unlocks the rapier class", _settings.has_rapier_class)
 	_check("the crawl is the one page that does not dim the race", not _results.dims_background())
+
+
+## race_restart() calls race_release_control() before game_over_menu_init(), so
+## running a championship out of lives from the pause menu has to clear
+## SHIP_RACING too -- that flag is the only thing gating hud_draw(), so without
+## it the GAME OVER screen keeps a live HUD (and a stale life count) on top of
+## the frozen race.
+func _check_pause_game_over_releases_control() -> void:
+	var pause_menu := _main.find_child("PauseMenu", true, false)
+	if pause_menu == null:
+		_check("main.tscn has a PauseMenu", false)
+		return
+
+	_race_setup.race_type = _race_setup.RACE_TYPE_CHAMPIONSHIP
+	_championship.reset()
+	_championship.lives = 1 # last one, so RESTART ends the run without changing scene
+
+	var player: Node = _director.player
+	player.is_racing = true
+	player.race_control_enabled = true
+
+	pause_menu.pause()
+	pause_menu.restart_race()
+
+	_check("the pause game over releases race control", not player.race_control_enabled)
+	_check("the pause game over stops the player racing, which hides the HUD", not player.is_racing)
+
+	# The HUD has to keep processing while the tree is paused, or it never
+	# notices and just freezes on its last pre-pause frame.
+	var hud := _main.find_child("Hud", true, false)
+	_check("the HUD keeps processing while paused", hud != null and hud.process_mode == Node.PROCESS_MODE_ALWAYS)
+
+	paused = false
 
 
 ## Crosses the line on the last lap with the given per-lap times and rank, the

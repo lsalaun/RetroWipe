@@ -177,10 +177,7 @@ func _end_race() -> void:
 		"lap_record": record,
 	}
 
-	# race_release_control(): the ship stops being racing (which hides the HUD)
-	# and coasts on instead of stopping dead.
-	player.race_control_enabled = false
-	player.is_racing = false
+	release_control()
 
 	# race_end()'s championship block: scores this race unconditionally --
 	# even a failed qualification still hands out points -- before the player
@@ -189,6 +186,18 @@ func _end_race() -> void:
 		Championship.record_race_result(_finish_order())
 
 	race_finished.emit(stats)
+
+
+## race.c race_release_control(): the ship stops being a racer -- which is what
+## takes the HUD down, since race_update() only calls hud_draw() while
+## SHIP_RACING is set -- and coasts on instead of stopping dead. Shared, as in
+## the original, by the finish line and by race_restart() running a championship
+## out of lives.
+func release_control() -> void:
+	if player == null:
+		return
+	player.race_control_enabled = false
+	player.is_racing = false
 
 
 ## The lap record the HUD shows for the current circuit / class / tab.

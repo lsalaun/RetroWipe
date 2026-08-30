@@ -143,6 +143,10 @@ const ENGINE_NOZZLE_OFFSETS := {
 @export var is_player_controlled: bool = true
 @export var handling: Resource
 @export var ship_model_scene: PackedScene # imported ship .glb (see tools/psx_track/convert_ships.py); null keeps the placeholder BodyMesh
+## Shrinks HullArea's BoxShape3D (measured from ALCOL.PRM, see ship_collision_manager.gd
+## and validate_ship_collision.gd) so ship-vs-ship contact hugs the visible hull more
+## closely. 1.0 keeps the raw measured size.
+@export var hull_collision_scale: float = 0.9
 
 @onready var hover_points: Array[RayCast3D] = [
 	$HoverFrontLeft,
@@ -161,6 +165,7 @@ const ENGINE_NOZZLE_OFFSETS := {
 @onready var body_mesh: MeshInstance3D = $BodyMesh
 @onready var camera_rig: Node3D = $CameraRig
 @onready var hull_area: Area3D = $HullArea
+@onready var hull_collision_shape: CollisionShape3D = $HullArea/HullCollisionShape3D
 @onready var ship_visual: Node3D = $ShipVisual
 ## Each is a Node3D anchored at its nozzle (see convert_ships.py-imported model
 ## measurements in the tscn transform), wrapping an Outer/Inner MeshInstance3D
@@ -254,6 +259,7 @@ func _ready() -> void:
 	last_ground_normal = Vector3.UP
 	last_ground_height = global_position.y
 	_snap_camera_to_ship()
+	_apply_hull_collision_scale()
 	if ship_model_scene != null:
 		set_ship_model(ship_model_scene)
 	# Same distance curve as every other positional sample in the port.
@@ -267,6 +273,18 @@ func _ready() -> void:
 			# identity explicitly rather than trusting the scene's default, since
 			# _rebuild_engine_trail's vertices are already absolute world positions.
 			trail_mesh.global_transform = Transform3D.IDENTITY
+
+
+## The BoxShape3D embedded in the .tscn is shared across every instance of this
+## scene (Godot only duplicates a sub_resource per-instance when it is flagged
+## local_to_scene, which this one is not), so mutating .size in place would
+## shrink every ship's hull at once. Duplicate first.
+func _apply_hull_collision_scale() -> void:
+	if hull_collision_shape == null or not (hull_collision_shape.shape is BoxShape3D):
+		return
+	var box: BoxShape3D = (hull_collision_shape.shape as BoxShape3D).duplicate()
+	box.size *= hull_collision_scale
+	hull_collision_shape.shape = box
 
 
 ## ship.c's `last_impact_time`-gated `sfx_play_at()`. The gating and the position

@@ -12,8 +12,11 @@ extends SceneTree
 
 const SHIP_SCENE := "res://scenes/WipeoutShip.tscn"
 
-## Measured from ALCOL.PRM, identical across all 8 ships.
-const EXPECTED_HULL_SIZE := Vector3(4.23, 1.05, 8.45)
+## Measured from ALCOL.PRM, identical across all 8 ships. The live hull box is
+## this times WipeoutShip.hull_collision_scale (see _initialize()), not this
+## raw value -- the export lets the box hug the visible hull more tightly than
+## the measured ALCOL.PRM extent.
+const MEASURED_HULL_SIZE := Vector3(4.23, 1.05, 8.45)
 
 enum Phase {
 	NOSE_IN, NOSE_IN_CHECK,
@@ -28,6 +31,7 @@ var _frames := 0
 var _phase: int = Phase.NOSE_IN
 var _ship_a: Node3D = null
 var _ship_b: Node3D = null
+var _expected_size: Vector3 = MEASURED_HULL_SIZE
 
 
 func _initialize() -> void:
@@ -42,6 +46,7 @@ func _initialize() -> void:
 	_ship_b.is_player_controlled = false
 	root.add_child(_ship_a)
 	root.add_child(_ship_b)
+	_expected_size = MEASURED_HULL_SIZE * _ship_a.hull_collision_scale
 
 
 func _physics_process(_delta: float) -> bool:
@@ -54,16 +59,16 @@ func _physics_process(_delta: float) -> bool:
 
 	match _phase:
 		Phase.NOSE_IN:
-			_place_ships(Vector3(0, 0, 1) * (EXPECTED_HULL_SIZE.z - 0.3))
+			_place_ships(Vector3(0, 0, 1) * (_expected_size.z - 0.3))
 		Phase.NOSE_IN_CHECK:
 			_check("nose-to-tail: overlaps just inside the real hull extent", _hull_areas_overlap())
-			_place_ships(Vector3(0, 0, 1) * (EXPECTED_HULL_SIZE.z + 0.3))
+			_place_ships(Vector3(0, 0, 1) * (_expected_size.z + 0.3))
 		Phase.NOSE_OUT_CHECK:
 			_check("nose-to-tail: clears just outside the real hull extent", not _hull_areas_overlap())
-			_place_ships(Vector3(1, 0, 0) * (EXPECTED_HULL_SIZE.x - 0.3))
+			_place_ships(Vector3(1, 0, 0) * (_expected_size.x - 0.3))
 		Phase.SIDE_IN_CHECK:
 			_check("side-by-side: overlaps just inside the real hull extent", _hull_areas_overlap())
-			_place_ships(Vector3(1, 0, 0) * (EXPECTED_HULL_SIZE.x + 0.3))
+			_place_ships(Vector3(1, 0, 0) * (_expected_size.x + 0.3))
 		Phase.SIDE_OUT_CHECK:
 			_check("side-by-side: clears just outside the real hull extent", not _hull_areas_overlap())
 		Phase.DONE:
@@ -86,9 +91,9 @@ func _check_hull_box_size() -> void:
 		_check("HullArea has a BoxShape3D", false)
 		return
 	var size: Vector3 = (shape.shape as BoxShape3D).size
-	_check("hull box matches the measured ALCOL.PRM size (not a guessed smaller one)", size.is_equal_approx(EXPECTED_HULL_SIZE))
-	_check("hull box is wider than the old 2.0 guess", size.x > 3.0)
-	_check("hull box is longer than the old 5.4 guess", size.z > 7.0)
+	_check("hull box matches hull_collision_scale times the measured ALCOL.PRM size (not a guessed smaller one)", size.is_equal_approx(_expected_size))
+	_check("hull box is wider than the old 2.0 guess", size.x > 3.0 * _ship_a.hull_collision_scale)
+	_check("hull box is longer than the old 5.4 guess", size.z > 7.0 * _ship_a.hull_collision_scale)
 
 
 func _place_ships(offset: Vector3) -> void:

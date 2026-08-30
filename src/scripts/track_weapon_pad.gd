@@ -61,11 +61,23 @@ func _on_area_entered(area: Area3D) -> void:
 	if ship.weapon_type != WipeoutWeapon.WeaponType.NONE:
 		return
 
-	ship.weapon_type = ship.get_random_weapon(weapon_class)
-	# ship.c gates SFX_POWERUP on `self->pilot == g.pilot`: only the player's own
-	# pickup is heard, not the seven AI ships collecting theirs.
+	# ship.c splits the pickup on `self->pilot == g.pilot`, and the two halves do
+	# genuinely different things -- only the player rolls the random table.
 	if ship.is_player_controlled:
 		WipeoutAudio.play_sfx(WipeoutAudio.SFX_POWERUP)
+		# A shielded ship draws from WEAPON_CLASS_PROJECTILE instead, which has
+		# neither SHIELD nor MINE in it: it cannot stack a second shield over the
+		# one it is already riding, nor pick up something it has no way to use.
+		var picked_class := weapon_class
+		if ship.has_shield():
+			picked_class = WipeoutWeaponManager.WEAPON_CLASS_PROJECTILE
+		ship.weapon_type = ship.get_random_weapon(picked_class)
+	else:
+		# `self->weapon_type = 1`, i.e. WEAPON_TYPE_MINE, with no roll at all.
+		# The value is only ever a "slot is loaded" token, since both ship_ai.c
+		# ladders overwrite it before they fire -- but leaving it random meant an
+		# AI could hold a type the original never gives it.
+		ship.weapon_type = WipeoutWeapon.WeaponType.MINE
 	_play_pickup_effect()
 	_set_active(false)
 	await get_tree().create_timer(respawn_time).timeout

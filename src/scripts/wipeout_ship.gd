@@ -59,6 +59,9 @@ const NEUTRAL_INPUTS := {
 @export var engine_flame_speed_reference: float = 90.0 # speed (m/s) at which the speed-based stretch term reaches its full contribution
 @export var engine_flame_jitter: float = 0.15 # ported from ship.c's per-frame vec3_rand(7) plume jitter
 @export var engine_flame_glow_energy: float = 1.4 # peak OmniLight3D energy per nozzle at full thrust/speed, for a subtle light bounce onto the track under the ship
+@export var engine_trail_samples: int = 24 # length of the position history feeding each engine's trajectory-hugging trail ribbon (at the physics tick rate, ~this many frames of trail)
+@export var engine_trail_width: float = 0.16 # ribbon half-width at the nozzle end at full thrust/speed; tapers to 0 toward the tail
+@export var engine_trail_color: Color = Color(0.984314, 0.415686, 0.223529, 0.65) # warm orange-red streak color, alpha fades to 0 toward the tail
 @export var resistance: float = 1.2 # ported from ship_player.c global drag: per-ship multiplier on acceleration -= velocity / resistance
 @export var max_resistance: float = 18.0 # velocity drag baseline, ported from SHIP_MAX_RESISTANCE (used identically on ground and in the air)
 @export var min_resistance: float = 6.5 # air grip divisor baseline, ported from SHIP_MIN_RESISTANCE: how strongly airborne velocity is pulled toward the forward axis
@@ -128,6 +131,15 @@ const NEUTRAL_INPUTS := {
 ## stretches both mesh layers together.
 @onready var engine_flames: Array[Node3D] = [$EngineFlameLeft, $EngineFlameRight]
 @onready var engine_glow_lights: Array[OmniLight3D] = [$EngineFlameLeft/Glow, $EngineFlameRight/Glow]
+## top_level MeshInstance3Ds (see WipeoutShip.tscn) rebuilt every physics frame
+## from _engine_trail_history -- world-space vertices, so top_level keeps them
+## from inheriting the ship's own rotating transform.
+@onready var engine_trail_meshes: Array[MeshInstance3D] = [$EngineTrailLeft, $EngineTrailRight]
+## Per-engine history of past world-space nozzle anchor positions, newest
+## first. Rebuilt into a ribbon each frame; this is what makes the trail hug
+## the ship's actual flight path through turns instead of a rigid cone fixed
+## to the ship's local axes.
+var _engine_trail_history: Array = [[], []]
 
 var thrust_mag: float = 0.0
 var reverse_brake: float = 0.0
@@ -321,6 +333,7 @@ func _physics_process(delta: float) -> void:
 	_update_orientation(hover, up, pitch_input, grounded, delta)
 	_update_visuals(steer, pitch_input, grounded, delta)
 	_update_engine_flame()
+	_update_engine_trails()
 	if is_player_controlled:
 		_update_camera(delta)
 
@@ -733,6 +746,71 @@ func _update_engine_flame() -> void:
 		engine_flame.position.z = _engine_flame_base_z - 0.5 + 0.5 * jittered_length
 		if i < engine_glow_lights.size() and engine_glow_lights[i] != null:
 			engine_glow_lights[i].light_energy = glow_energy * randf_range(0.85, 1.15)
+
+
+## Samples each engine's fixed nozzle anchor (world-space, independent of the
+## flame cone's own scale/position animation above) into a short history, then
+## rebuilds a camera-facing ribbon from it. Unlike the cone -- which is rigid
+## in the ship's own local frame -- this ribbon is built from where the
+## nozzle *was* over the last engine_trail_samples physics frames, so it
+## bends and lags through turns exactly like the ship's actual flight path,
+## matching the light-trail look of the reference screenshots rather than a
+## trail that instantly snaps to the ship's current orientation.
+func _update_engine_trails() -> void:
+	if engine_flames.is_empty():
+		return
+	var thrust_ratio := (thrust_mag / thrust_max) if thrust_max > 0.0 else 0.0
+	var speed_ratio := clampf(velocity.length() / engine_flame_speed_reference, 0.0, 1.0)
+	var intensity := clampf(0.2 + 0.8 * maxf(thrust_ratio, speed_ratio), 0.0, 1.0)
+	var cam := get_viewport().get_camera_3d()
+	for i in engine_flames.size():
+		var engine_flame := engine_flames[i]
+		if engine_flame == null:
+			continue
+		var anchor_local := Vector3(engine_flame.position.x, engine_flame.position.y, _engine_flame_base_z - 0.5)
+		var anchor_world := global_transform * anchor_local
+		var history: Array = _engine_trail_history[i]
+		history.push_front(anchor_world)
+		if history.size() > engine_trail_samples:
+			history.resize(engine_trail_samples)
+		if i < engine_trail_meshes.size() and engine_trail_meshes[i] != null:
+			_rebuild_engine_trail(history, engine_trail_meshes[i], engine_trail_width * intensity, cam)
+
+
+## Builds a camera-facing (screen-space) ribbon strip from a newest-first
+## history of world-space points, tapering width and alpha to 0 at the oldest
+## sample so the tail dissolves instead of ending in a hard edge.
+func _rebuild_engine_trail(history: Array, mesh_instance: MeshInstance3D, width: float, cam: Camera3D) -> void:
+	var count: int = history.size()
+	if count < 2 or width <= 0.001:
+		mesh_instance.mesh = null
+		return
+
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	for i in count:
+		var p: Vector3 = history[i]
+		var t := float(i) / float(count - 1)
+		var dir: Vector3 = (p - history[1]) if i == 0 else (history[i - 1] - p)
+		if dir.length_squared() < 0.0001:
+			dir = Vector3.FORWARD
+		dir = dir.normalized()
+		var to_cam := (cam.global_position - p) if cam != null else Vector3.UP
+		if to_cam.length_squared() < 0.0001:
+			to_cam = Vector3.UP
+		var side := dir.cross(to_cam)
+		if side.length_squared() < 0.0001:
+			side = dir.cross(Vector3.UP)
+		if side.length_squared() < 0.0001:
+			side = Vector3.RIGHT
+		side = side.normalized()
+		var half_width := width * (1.0 - t)
+		var col := Color(engine_trail_color.r, engine_trail_color.g, engine_trail_color.b, engine_trail_color.a * (1.0 - t))
+		st.set_color(col)
+		st.add_vertex(p + side * half_width)
+		st.set_color(col)
+		st.add_vertex(p - side * half_width)
+	mesh_instance.mesh = st.commit()
 
 
 ## Ported from camera.c's camera_update_race_external(): the camera's raw chase

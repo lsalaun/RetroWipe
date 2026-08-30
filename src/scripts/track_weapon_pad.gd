@@ -48,6 +48,11 @@ func _ready() -> void:
 func _on_area_entered(area: Area3D) -> void:
 	if not _is_active:
 		return
+	# race.c only calls track_cycle_pickups() outside a time trial, so no face
+	# ever gains FACE_PICKUP_ACTIVE there and no pad can arm anyone. The
+	# per-lap turbo in ship.c is that mode's only weapon.
+	if WipeoutShip.is_time_trial(get_tree()):
+		return
 	var ship := area.get_parent() as WipeoutShip
 	if ship == null:
 		return

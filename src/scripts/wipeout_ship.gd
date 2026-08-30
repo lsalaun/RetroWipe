@@ -1190,6 +1190,20 @@ func _update_race_progress() -> void:
 		direction_forward = forward.normalized().dot(path_dir) >= 0.0
 
 
+## g.race_type, resolved through the tree rather than the RaceSetup autoload
+## identifier: that identifier does not exist at parse time when this script is
+## pulled in as a dependency of a --script validator, which is the same reason
+## WipeoutAudio and WipeoutWeaponManager.instance(tree) look the way they do.
+## Shared with TrackWeaponPad, which gates its pickups on the same flag.
+static func is_time_trial(tree: SceneTree) -> bool:
+	if tree == null:
+		return false
+	var setup := tree.root.get_node_or_null("RaceSetup")
+	if setup == null:
+		return false
+	return setup.race_type == setup.RACE_TYPE_TIME_TRIAL
+
+
 ## Ported from ship.c's "crossed line forwards" branch: the lap advances every
 ## time, but only a *new* highest lap banks a lap time.
 func _cross_start_line() -> void:
@@ -1200,6 +1214,15 @@ func _cross_start_line() -> void:
 
 	var completed := lap_time
 	lap_time = 0.0
+
+	# ship.c hands out a fresh turbo on every new lap of a time trial, the
+	# crossing at GO included -- it is the only weapon that mode ever gives,
+	# since race.c stops cycling the track pickups there. Granted before the
+	# lap-0 return below, exactly as the original grants it before its own
+	# lap > 0 guard.
+	if is_time_trial(get_tree()):
+		weapon_type = WipeoutWeapon.WeaponType.TURBO
+
 	# lap 0 is the crossing that starts the first timed lap (ships spawn behind
 	# the line), so there is nothing to record for it.
 	if lap <= 0:

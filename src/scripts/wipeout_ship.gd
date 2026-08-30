@@ -146,7 +146,7 @@ const ENGINE_NOZZLE_OFFSETS := {
 ## Shrinks HullArea's BoxShape3D (measured from ALCOL.PRM, see ship_collision_manager.gd
 ## and validate_ship_collision.gd) so ship-vs-ship contact hugs the visible hull more
 ## closely. 1.0 keeps the raw measured size.
-@export var hull_collision_scale: float = 0.9
+@export var hull_collision_scale: float = 0.8
 
 @onready var hover_points: Array[RayCast3D] = [
 	$HoverFrontLeft,

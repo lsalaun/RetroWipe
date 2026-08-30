@@ -198,6 +198,7 @@ var race_control_enabled: bool = true # false while the start countdown runs (sh
 var on_left_side: bool = false
 var just_in_front: bool = false
 var position_rank: int = 8
+var pilot_name: String = "" # ShipSelection.SHIPS "pilot" identity, set by main.gd; Championship's per-race scoring key
 var wall_hit_count: int = 0
 var _last_curve_offset: float = -1.0
 var _last_line_distance: float = 0.0 # signed distance to the start line on the previous frame, in curve meters; the sign flip is the crossing test

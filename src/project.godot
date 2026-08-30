@@ -27,6 +27,7 @@ RaceSetup="*res://scripts/race_setup.gd"
 Settings="*res://scripts/settings.gd"
 GameAudio="*res://scripts/game_audio.gd"
 WeaponManager="*res://scripts/wipeout_weapon_manager.gd"
+Championship="*res://scripts/championship.gd"
 
 [display]
 

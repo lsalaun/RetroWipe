@@ -9,28 +9,58 @@ extends SceneTree
 
 const CIRCUIT_SCENE := "res://scenes/CircuitMenu.tscn"
 
+var _packed: PackedScene = null
+var _settings: Node = null
 var _menu: Control = null
+var _locked_menu: Control = null
 var _frames := 0
+## 0 while the locked-default instance settles, 1 while the unlocked instance
+## (every other check below) settles.
+var _phase := 0
 var _failures: Array[String] = []
 
 
 func _initialize() -> void:
-	var packed := load(CIRCUIT_SCENE) as PackedScene
-	if packed == null:
+	_packed = load(CIRCUIT_SCENE) as PackedScene
+	if _packed == null:
 		push_error("validate_circuit_menu: failed to load CircuitMenu")
 		quit(1)
 		return
-	_menu = packed.instantiate() as Control
-	if _menu == null:
-		push_error("validate_circuit_menu: CircuitMenu is not a Control")
+	_settings = root.get_node_or_null("Settings")
+	if _settings == null:
+		push_error("validate_circuit_menu: Settings autoload missing")
 		quit(1)
 		return
-	root.add_child(_menu)
+
+	# FIRESTAR is gated on Settings.has_bonus_circuits (circuit_menu.gd, ported
+	# from page_circuit_init()'s is_bonus_circuit check). Check the locked
+	# default on a throwaway instance first; every other check below assumes
+	# it is unlocked (all seven circuits listed).
+	_settings.has_bonus_circuits = false
+	_locked_menu = _packed.instantiate() as Control
+	root.add_child(_locked_menu)
 
 
 func _physics_process(_delta: float) -> bool:
 	_frames += 1
 	if _frames < 3:
+		return false
+
+	if _phase == 0:
+		var locked_page = _locked_menu.current_page()
+		_check("FIRESTAR hidden by default", locked_page != null and locked_page.entries.size() == 6)
+		_locked_menu.queue_free()
+
+		_settings.has_bonus_circuits = true
+		_menu = _packed.instantiate() as Control
+		if _menu == null:
+			push_error("validate_circuit_menu: CircuitMenu is not a Control")
+			quit(1)
+			return true
+		root.add_child(_menu)
+
+		_phase = 1
+		_frames = 0
 		return false
 
 	var track_selection := root.get_node_or_null("TrackSelection")

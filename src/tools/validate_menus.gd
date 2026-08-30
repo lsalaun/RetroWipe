@@ -101,6 +101,9 @@ const EXPECTED: Array[Dictionary] = [
 ]
 
 var _frames := 0
+## 0 while every menu but CircuitMenu settles, 1 while CircuitMenu (rebuilt
+## once Settings.has_bonus_circuits is forced) settles.
+var _phase := 0
 var _menus: Array[Control] = []
 var _failures: Array[String] = []
 
@@ -124,6 +127,27 @@ func _initialize() -> void:
 func _physics_process(_delta: float) -> bool:
 	_frames += 1
 	if _frames < 3:
+		return false
+
+	if _phase == 0:
+		# CircuitMenu's FIRESTAR entry is gated on Settings.has_bonus_circuits
+		# (circuit_menu.gd); force it unlocked so EXPECTED's seven-circuit list
+		# still matches, same as validate_circuit_menu.gd. Settings' own
+		# _ready() (which loads the flag from disk) is not guaranteed to run
+		# before this script's _initialize(), so the CircuitMenu instance that
+		# reads it has to be built *after* that race has settled, not with the
+		# rest of _menus up front.
+		var settings := root.get_node_or_null("Settings")
+		if settings != null:
+			settings.has_bonus_circuits = true
+		var circuit_index := EXPECTED.find_custom(func(e): return e["scene"] == "res://scenes/CircuitMenu.tscn")
+		var packed := load(str(EXPECTED[circuit_index]["scene"])) as PackedScene
+		var menu := packed.instantiate() as Control
+		root.add_child(menu)
+		_menus[circuit_index].queue_free()
+		_menus[circuit_index] = menu
+		_phase = 1
+		_frames = 0
 		return false
 
 	for i in EXPECTED.size():

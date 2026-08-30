@@ -34,6 +34,13 @@ var vsync: bool = true
 var show_fps: bool = false # save.draw_stats == DRAW_STATS_FPS, read by the in-race HUD
 var master_volume: float = 1.0
 
+## save.has_rapier_class / save.has_bonus_circuits: campaign unlocks, flipped by
+## Championship.complete_championship() (race.c's race_next()). The shipped C
+## defaults are true/true "for testing"; a fresh save here starts locked, the
+## documented intent.
+var has_rapier_class: bool = false
+var has_bonus_circuits: bool = false
+
 ## action -> {"key": physical_keycode, "pad": joypad_button_index}; -1 = unset.
 var key_binds: Dictionary = {}
 
@@ -57,6 +64,8 @@ func _load() -> void:
 	vsync = cfg.get_value("video", "vsync", vsync)
 	show_fps = cfg.get_value("video", "show_fps", show_fps)
 	master_volume = cfg.get_value("audio", "master_volume", master_volume)
+	has_rapier_class = cfg.get_value("progress", "has_rapier_class", has_rapier_class)
+	has_bonus_circuits = cfg.get_value("progress", "has_bonus_circuits", has_bonus_circuits)
 	for action in REBINDABLE_ACTIONS:
 		var key_code: int = cfg.get_value("controls", action + "_key", -1)
 		var pad_index: int = cfg.get_value("controls", action + "_pad", -1)
@@ -73,6 +82,8 @@ func save() -> void:
 	cfg.set_value("video", "vsync", vsync)
 	cfg.set_value("video", "show_fps", show_fps)
 	cfg.set_value("audio", "master_volume", master_volume)
+	cfg.set_value("progress", "has_rapier_class", has_rapier_class)
+	cfg.set_value("progress", "has_bonus_circuits", has_bonus_circuits)
 	for action in REBINDABLE_ACTIONS:
 		var bind: Dictionary = key_binds.get(action, {})
 		cfg.set_value("controls", action + "_key", bind.get("key", -1))
@@ -138,6 +149,16 @@ func set_show_fps(value: bool) -> void:
 func set_master_volume(value: float) -> void:
 	master_volume = clampf(value, 0.0, 1.0)
 	apply_audio()
+	save()
+
+
+func set_has_rapier_class(value: bool) -> void:
+	has_rapier_class = value
+	save()
+
+
+func set_has_bonus_circuits(value: bool) -> void:
+	has_bonus_circuits = value
 	save()
 
 

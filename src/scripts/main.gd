@@ -38,6 +38,7 @@ func _ready() -> void:
 		RaceFieldScript.place_ship(player, spawn, center_line, spawn_offset, RaceFieldScript.NUM_PILOTS - 1)
 		if ShipSelection.selected_ship_scene != null:
 			player.set_ship_model(ShipSelection.selected_ship_scene)
+		player.pilot_name = RaceSetup.pilot_name
 		_apply_ship_attributes(player, RaceSetup.pilot_name)
 		return
 
@@ -68,6 +69,7 @@ func _ready() -> void:
 			var mesh_scene := load(mesh_path) as PackedScene
 			if mesh_scene != null:
 				ship.set_ship_model(mesh_scene)
+		ship.pilot_name = str(entry.get("pilot", ""))
 		_apply_ship_attributes(ship, str(entry.get("pilot", "")), str(entry.get("team", "")))
 		if ship is WipeoutShipAI:
 			var settings := RaceFieldScript.ai_settings_for(RaceSetup.race_class, inv_rank)

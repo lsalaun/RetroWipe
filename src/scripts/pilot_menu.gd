@@ -75,8 +75,13 @@ func _select_pilot(data: int) -> void:
 	RaceSetup.select_pilot(_pilots[data])
 
 	if RaceSetup.race_type == RaceSetup.RACE_TYPE_CHAMPIONSHIP:
-		# Championships always start on the first available circuit.
-		TrackSelection.select_track(TrackSelection.TRACKS[0]["scene"])
+		# button_pilot_select(): g.circuit = 0; game_reset_championship();
+		# game_set_scene(GAME_SCENE_RACE); -- circuit 0 is CIRCUIT_ALTIMA_VII,
+		# not TrackSelection.TRACKS[0] (TERRAMAX), and still needs the
+		# class-correct variant, same as circuit_menu.gd's own selection.
+		Championship.reset()
+		var scene := TrackSelection.scene_for_circuit(Championship.current_circuit(), RaceSetup.race_class)
+		TrackSelection.select_track(scene)
 		TrackSelection.start_race(get_tree())
 	else:
 		get_tree().change_scene_to_file(CIRCUIT_MENU)

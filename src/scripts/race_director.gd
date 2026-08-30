@@ -175,6 +175,13 @@ func _end_race() -> void:
 	# and coasts on instead of stopping dead.
 	player.race_control_enabled = false
 	player.is_racing = false
+
+	# race_end()'s championship block: scores this race unconditionally --
+	# even a failed qualification still hands out points -- before the player
+	# is even told whether they personally qualified.
+	if RaceSetup.race_type == RaceSetup.RACE_TYPE_CHAMPIONSHIP:
+		Championship.record_race_result(_finish_order())
+
 	race_finished.emit(stats)
 
 
@@ -199,6 +206,17 @@ func _ships() -> Array[WipeoutShip]:
 		if ship != null:
 			result.append(ship)
 	return result
+
+
+## sort_rank_compare() + the position_rank writeback in ship.c's
+## ships_update(): every pilot's name, ordered 1st..last by position_rank.
+func _finish_order() -> Array[String]:
+	var ships := _ships()
+	ships.sort_custom(func(a: WipeoutShip, b: WipeoutShip): return a.position_rank < b.position_rank)
+	var names: Array[String] = []
+	for ship in ships:
+		names.append(ship.pilot_name)
+	return names
 
 
 func _play_voice(path: String) -> void:

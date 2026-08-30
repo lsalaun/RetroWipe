@@ -511,6 +511,10 @@ func _decide_just_in_front() -> void:
 		return
 	if chance < 52:
 		if not shield_active and is_racing:
+			# ship_ai.c announces the AI's intent the moment it picks the weapon,
+			# not when weapons_fire_delayed() finally launches it -- the warning
+			# is what gives the player time to react.
+			WipeoutAudio.play_sfx(WipeoutAudio.SFX_VOICE_MINES)
 			weapon_type = WipeoutWeapon.WeaponType.MINE
 			fire_weapon_delayed(weapon_type)
 	elif not shield_active:
@@ -547,11 +551,15 @@ func _decide_just_behind() -> void:
 		return
 	var player := _find_player()
 	if chance < 54:
+		WipeoutAudio.play_sfx(WipeoutAudio.SFX_VOICE_ROCKETS)
 		weapon_type = WipeoutWeapon.WeaponType.ROCKET
 		fire_weapon_delayed(weapon_type)
 	elif chance < 60:
+		WipeoutAudio.play_sfx(WipeoutAudio.SFX_VOICE_MISSILE)
 		weapon_type = WipeoutWeapon.WeaponType.MISSILE
 		fire_weapon_delayed(weapon_type, player)
 	else:
+		# SFX_VOICE_SHOCKWAVE is the E-bolt's warning in ship_ai.c.
+		WipeoutAudio.play_sfx(WipeoutAudio.SFX_VOICE_SHOCKWAVE)
 		weapon_type = WipeoutWeapon.WeaponType.EBOLT
 		fire_weapon_delayed(weapon_type, player)

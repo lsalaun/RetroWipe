@@ -81,6 +81,7 @@ func fire_weapon(ship: WipeoutShip, weapon_type: WipeoutWeapon.WeaponType, targe
 	# keep re-firing the same weapon on every later DPA decision.
 	if is_instance_valid(ship):
 		ship.weapon_type = WipeoutWeapon.WeaponType.NONE
+		_play_fire_sfx(ship, weapon_type)
 	# weapon_fire_mine() queues WEAPON_MINE_COUNT weapons at once, each with its
 	# own staggered release timer.
 	if weapon_type == WipeoutWeapon.WeaponType.MINE:
@@ -109,6 +110,25 @@ func fire_weapon(ship: WipeoutShip, weapon_type: WipeoutWeapon.WeaponType, targe
 	weapons.append(weapon)
 	weapon_fired.emit(ship, weapon_type)
 	return weapon
+
+
+## weapon.c plays the launch sample from each weapon_fire_*(), and every one of
+## them is gated on `self->owner->pilot == g.pilot` -- the launch is only ever
+## heard for the player's own shots, never for the AI's.
+func _play_fire_sfx(ship: WipeoutShip, weapon_type: WipeoutWeapon.WeaponType) -> void:
+	if not ship.is_player_controlled:
+		return
+	match weapon_type:
+		WipeoutWeapon.WeaponType.MINE:
+			WipeoutAudio.play_sfx(WipeoutAudio.SFX_MINE_DROP)
+		WipeoutWeapon.WeaponType.MISSILE, WipeoutWeapon.WeaponType.ROCKET:
+			WipeoutAudio.play_sfx(WipeoutAudio.SFX_MISSILE_FIRE)
+		WipeoutWeapon.WeaponType.EBOLT:
+			WipeoutAudio.play_sfx(WipeoutAudio.SFX_EBOLT)
+		WipeoutWeapon.WeaponType.TURBO:
+			# weapon_fire_turbo() reuses the missile sample at pitch 0.25, i.e.
+			# half the unpitched rate (see WipeoutAudio.C_PITCH_TO_GODOT).
+			WipeoutAudio.play_sfx(WipeoutAudio.SFX_MISSILE_FIRE, 0.25 * WipeoutAudio.C_PITCH_TO_GODOT)
 
 
 func fire_weapon_delayed(ship: WipeoutShip, weapon_type: WipeoutWeapon.WeaponType, target: WipeoutShip = null) -> void:

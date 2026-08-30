@@ -1,8 +1,9 @@
-[gd_scene load_steps=14 format=3 uid="uid://cntc2pxmd03rx"]
+[gd_scene load_steps=15 format=3 uid="uid://cntc2pxmd03rx"]
 
 [ext_resource type="Script" path="res://scripts/wipeout_ship.gd" id="1_script"]
 [ext_resource type="Resource" path="res://resources/handling/default_profile.tres" id="resource_handling"]
 [ext_resource type="AudioStream" uid="uid://6bu57uhxpfbw" path="res://assets/sfx/crunch.wav" id="2_crunch"]
+[ext_resource type="AudioStream" uid="uid://drj8cysr4naia" path="res://assets/sfx/impact.wav" id="3_impact"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(3.4, 1.5, 7.9)
@@ -72,7 +73,7 @@ emission_energy_multiplier = 0.5
 [node name="WipeoutShip" type="Node3D"]
 script = ExtResource("1_script")
 handling = ExtResource("resource_handling")
-wall_impact_sound = ExtResource("2_crunch")
+wall_impact_sound = ExtResource("3_impact")
 ship_impact_sound = ExtResource("2_crunch")
 engine_trail_material = SubResource("StandardMaterial3D_trail")
 

@@ -216,6 +216,10 @@ func _check_ship_collision() -> WipeoutShip:
 
 
 func _on_ship_hit(ship: WipeoutShip) -> void:
+	# weapon_update_{rocket,missile,ebolt}() all announce the hit with
+	# SFX_EXPLOSION_1 at the impact point, before the shield check -- a shielded
+	# ship still makes the bang, it just takes no damage.
+	WipeoutAudio.play_sfx_at(WipeoutAudio.SFX_EXPLOSION_1, global_position)
 	# flags_not(ship->flags, SHIP_SHIELDED): a shielded ship eats the hit with no
 	# effect, but the weapon is still spent.
 	if not ship.has_shield():

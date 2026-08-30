@@ -3,6 +3,7 @@ extends SceneTree
 ## Headless check that SFX_CRUNCH is assigned to both impact slots.
 
 const CRUNCH := "res://assets/sfx/crunch.wav"
+const IMPACT := "res://assets/sfx/impact.wav"
 const SHIP_SCENE := "res://scenes/WipeoutShip.tscn"
 const AI_SCENE := "res://scenes/WipeoutShipAI.tscn"
 const MUSIC: Array[String] = [
@@ -79,18 +80,19 @@ func _cleanup() -> void:
 
 
 func _check_files() -> bool:
-	if not ResourceLoader.exists(CRUNCH):
-		push_error("validate_impact_sfx: missing %s" % CRUNCH)
-		return false
-	var crunch := load(CRUNCH)
-	if crunch == null:
-		push_error("validate_impact_sfx: failed to load crunch.wav")
-		return false
-	if crunch is AudioStreamWAV:
-		var rate := int((crunch as AudioStreamWAV).mix_rate)
-		if rate != 22050:
-			push_error("validate_impact_sfx: crunch mix_rate %d != 22050" % rate)
+	for path in [CRUNCH, IMPACT]:
+		if not ResourceLoader.exists(path):
+			push_error("validate_impact_sfx: missing %s" % path)
 			return false
+		var stream := load(path)
+		if stream == null:
+			push_error("validate_impact_sfx: failed to load %s" % path)
+			return false
+		if stream is AudioStreamWAV:
+			var rate := int((stream as AudioStreamWAV).mix_rate)
+			if rate != 22050:
+				push_error("validate_impact_sfx: %s mix_rate %d != 22050" % [path, rate])
+				return false
 	for path in MUSIC:
 		if not ResourceLoader.exists(path):
 			push_error("validate_impact_sfx: missing %s" % path)
@@ -104,7 +106,10 @@ func _check_ship(ship: Node, label: String) -> bool:
 	if wall == null or hull == null:
 		push_error("validate_impact_sfx: %s missing impact streams" % label)
 		return false
-	if wall.resource_path != CRUNCH or hull.resource_path != CRUNCH:
+	# ship.c splits the two: SFX_IMPACT for the track (wing/nose/floor, in
+	# ship_resolve_wing_collision()/ship_resolve_nose_collision()) and SFX_CRUNCH
+	# only for ship-vs-ship, in ship_collide_with_ship().
+	if wall.resource_path != IMPACT or hull.resource_path != CRUNCH:
 		push_error("validate_impact_sfx: %s streams %s / %s" % [label, wall.resource_path, hull.resource_path])
 		return false
 	return true

@@ -28,6 +28,18 @@ const NEUTRAL_INPUTS := {
 	"brake_right": false,
 }
 
+## sfx_reserve_loop() sources: the first four ride the player (ship_player.c's
+## ship_player_update_sfx), the last one every remote ship (ship_ai.c).
+const ENGINE_THRUST_SFX := "res://assets/sfx/engine_thrust.wav"
+const ENGINE_INTAKE_SFX := "res://assets/sfx/engine_intake.wav"
+const SHIELD_SFX := "res://assets/sfx/shield.wav"
+const TURBULENCE_SFX := "res://assets/sfx/turbulence.wav"
+const ENGINE_REMOTE_SFX := "res://assets/sfx/engine_remote.wav"
+
+## hud_speedo.gd's SPEED_FULL: the speed the speedo reads as full scale, used
+## here to normalise ship_player_update_sfx()'s `speedf`.
+const SPEEDO_FULL_SPEED := 90.0
+
 ## Per-hull nozzle anchor (x, y, base_z), keyed by ship model filename (lowercase,
 ## no extension -- see convert_ships.py). Measured directly off each ALLSH.PRM-derived
 ## .glb's own geometry: the tight cluster of vertices at the tail that share an edge
@@ -119,7 +131,7 @@ const ENGINE_NOZZLE_OFFSETS := {
 @export var wall_wing_extra_damping: float = 0.72 # extra velocity damping applied only on wing impacts
 @export var wall_impact_cooldown_duration: float = 0.12 # shorter cooldown to keep impact cadence closer to Wipeout
 @export var hull_unstick_speed: float = 6.0 # last-resort probe-based push-out if the hull still ends up embedded in geometry (thin wall tunnelled through at high speed); not a physics body, just a nudge along the contact normal
-@export var wall_impact_sound: AudioStream # played through WallImpactSFX on a fresh (non-cooldown) wall hit
+@export var wall_impact_sound: AudioStream # played through WallImpactSFX on a fresh (non-cooldown) wall hit; ship.c uses SFX_IMPACT here and SFX_CRUNCH only for ship-vs-ship
 @export var ship_impact_sound: AudioStream # played through ShipImpactSFX on HullArea.area_entered
 @export var ship_impact_cooldown_duration: float = 0.2 # ported from ship.c: last_impact_time > 0.2 gate before playing SFX_CRUNCH
 @export var mass: float = 1.0 # ported from ship.c ship_collide_with_ship: mass-weighted velocity exchange between ships
@@ -179,6 +191,18 @@ var roll_rate: float = 0.0
 var visual_pitch: float = 0.0
 var wall_impact_cooldown: float = 0.0
 var ship_impact_cooldown: float = 0.0
+
+## ship_player.c's four reserved loops (thrust/intake/shield/turbulence) for the
+## player, and ship_ai.c's single positional SFX_ENGINE_REMOTE for everyone
+## else. Built lazily on the first _update_engine_sfx() rather than in _ready():
+## wipeout_ship_ai.gd clears is_player_controlled in its own _ready(), which
+## runs after this script's, so the flag is not trustworthy that early.
+var _engine_thrust_sfx: AudioStreamPlayer = null
+var _engine_intake_sfx: AudioStreamPlayer = null
+var _shield_sfx: AudioStreamPlayer = null
+var _turbulence_sfx: AudioStreamPlayer = null
+var _engine_remote_sfx: AudioStreamPlayer3D = null
+var _engine_sfx_ready: bool = false
 var desired_forward: Vector3 = Vector3.FORWARD
 var last_ground_normal: Vector3 = Vector3.UP
 var last_ground_height: float = 0.0
@@ -231,6 +255,9 @@ func _ready() -> void:
 		set_ship_model(ship_model_scene)
 	if hull_area != null:
 		hull_area.area_entered.connect(_on_hull_area_entered)
+	# Same distance curve as every other positional sample in the port.
+	WipeoutAudio.configure_3d_falloff(wall_impact_sfx)
+	WipeoutAudio.configure_3d_falloff(ship_impact_sfx)
 	if not engine_flames.is_empty() and engine_flames[0] != null:
 		_engine_flame_base_z = engine_flames[0].position.z
 	for trail_mesh in engine_trail_meshes:
@@ -261,6 +288,100 @@ func _play_sfx(player: AudioStreamPlayer3D, stream: AudioStream, at_position: Ve
 	player.global_position = at_position
 	player.stream = stream
 	player.play()
+
+
+# -----------------------------------------------------------------------------
+# Engine SFX
+
+## ship_player.c ship_player_update_sfx() for the player, ship_ai.c's
+## sfx_set_position(sfx_engine_thrust, ...) for everyone else. Volumes are the
+## original's linear 0..1 values; pitches are its values doubled, since sfx.c
+## mixes 22 kHz samples at 44.1 kHz and so calls 0.5 "unpitched" where Godot
+## calls it 1.0 (see WipeoutAudio.C_PITCH_TO_GODOT).
+func _update_engine_sfx() -> void:
+	if not _engine_sfx_ready:
+		_build_engine_sfx()
+
+	# `speedf = self->speed * 0.000015` is in PSX units; scaled here against the
+	# port's own top speed (hud_speedo.gd's full-scale bar) so the curves keep
+	# the original's 0..0.5 working range.
+	var speedf: float = clampf(velocity.length() / (2.0 * SPEEDO_FULL_SPEED), 0.0, 0.5)
+
+	if not is_player_controlled:
+		# The remotes are audible for the whole race; only their distance to the
+		# camera moves them, which AudioStreamPlayer3D already does.
+		_set_loop_volume(_engine_remote_sfx, 0.5 if is_racing else 0.0)
+		return
+
+	var thrust_ratio: float = clampf(thrust_mag / maxf(thrust_max, 0.001), 0.0, 1.0)
+
+	_set_loop_volume(_engine_intake_sfx, speedf)
+	if _engine_intake_sfx != null:
+		_engine_intake_sfx.pitch_scale = 1.0 + 2.5 * speedf
+
+	_set_loop_volume(_engine_thrust_sfx, 0.05 + 0.025 * thrust_ratio)
+	if _engine_thrust_sfx != null:
+		_engine_thrust_sfx.pitch_scale = 0.4 + thrust_ratio + 2.0 * speedf
+
+	# brake_left/brake_right are already the original's `brake * 0.0035`, i.e.
+	# 0..1. The original also pans this by (brake_right - brake_left); a
+	# non-positional AudioStreamPlayer has no pan, so only the level is ported.
+	_set_loop_volume(_turbulence_sfx, (speedf * brake_left + speedf * brake_right) * 0.5)
+	_set_loop_volume(_shield_sfx, 0.5 if shield_active else 0.0)
+
+
+## `sfx->volume = x` on a reserved loop. The node keeps playing at silence
+## rather than stopping, so it never restarts mid-race from a different offset.
+func _set_loop_volume(player: Node, volume: float) -> void:
+	if player == null:
+		return
+	var muted: bool = volume <= 0.001 or not is_racing
+	player.volume_db = -80.0 if muted else linear_to_db(minf(volume, 1.0))
+
+
+func _build_engine_sfx() -> void:
+	_engine_sfx_ready = true
+	if is_player_controlled:
+		_engine_thrust_sfx = _add_loop_player("EngineThrustSFX", ENGINE_THRUST_SFX)
+		_engine_intake_sfx = _add_loop_player("EngineIntakeSFX", ENGINE_INTAKE_SFX)
+		_shield_sfx = _add_loop_player("ShieldSFX", SHIELD_SFX)
+		_turbulence_sfx = _add_loop_player("TurbulenceSFX", TURBULENCE_SFX)
+	else:
+		_engine_remote_sfx = _add_loop_player_3d("EngineRemoteSFX", ENGINE_REMOTE_SFX)
+
+
+## sfx_reserve_loop(): start silent, from a random offset so a grid of eight
+## ships does not phase-lock into one loud engine.
+func _add_loop_player(node_name: String, path: String) -> AudioStreamPlayer:
+	var stream := WipeoutAudio.looping_stream(path)
+	if stream == null:
+		return null
+	var player := AudioStreamPlayer.new()
+	player.name = node_name
+	player.bus = "SFX"
+	player.stream = stream
+	player.volume_db = -80.0
+	add_child(player)
+	player.play(randf_range(0.0, stream.get_length()))
+	return player
+
+
+func _add_loop_player_3d(node_name: String, path: String) -> AudioStreamPlayer3D:
+	var stream := WipeoutAudio.looping_stream(path)
+	if stream == null:
+		return null
+	var player := AudioStreamPlayer3D.new()
+	player.name = node_name
+	player.bus = "SFX"
+	player.stream = stream
+	player.volume_db = -80.0
+	# sfx_set_position() recomputes pitch from the camera-relative velocity every
+	# frame; Godot does the same job with doppler tracking on the physics step.
+	player.doppler_tracking = AudioStreamPlayer3D.DOPPLER_TRACKING_PHYSICS_STEP
+	WipeoutAudio.configure_3d_falloff(player)
+	add_child(player)
+	player.play(randf_range(0.0, stream.get_length()))
+	return player
 
 
 func _apply_handling_profile() -> void:
@@ -382,6 +503,7 @@ func _physics_process(delta: float) -> void:
 	_update_visuals(steer, pitch_input, grounded, delta)
 	_update_engine_flame()
 	_update_engine_trails()
+	_update_engine_sfx()
 	if is_player_controlled:
 		_update_camera(delta)
 
@@ -1157,6 +1279,11 @@ func fire_weapon_delayed(wtype: WipeoutWeapon.WeaponType, target: WipeoutShip = 
 ## target; the rest ignore it.
 func fire_held_weapon() -> void:
 	if weapon_type == WipeoutWeapon.WeaponType.NONE:
+		return
+	# ship_player.c: a shielded ship cannot fire, and the attempt answers with
+	# the menu-move blip rather than doing nothing.
+	if shield_active:
+		WipeoutAudio.play_sfx(WipeoutAudio.SFX_MENU_MOVE)
 		return
 	fire_weapon(weapon_type, _acquire_weapon_target())
 

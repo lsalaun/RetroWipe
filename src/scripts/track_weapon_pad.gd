@@ -57,6 +57,10 @@ func _on_area_entered(area: Area3D) -> void:
 		return
 
 	ship.weapon_type = ship.get_random_weapon(weapon_class)
+	# ship.c gates SFX_POWERUP on `self->pilot == g.pilot`: only the player's own
+	# pickup is heard, not the seven AI ships collecting theirs.
+	if ship.is_player_controlled:
+		WipeoutAudio.play_sfx(WipeoutAudio.SFX_POWERUP)
 	_play_pickup_effect()
 	_set_active(false)
 	await get_tree().create_timer(respawn_time).timeout

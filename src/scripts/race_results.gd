@@ -285,12 +285,21 @@ func _on_quit_pressed() -> void:
 # -----------------------------------------------------------------------------
 # Drawing
 
+## race.c dims the 3D view behind an in-race menu with a half-alpha black quad,
+## but skips it for the scroll text: race_next() raises menu_is_scroll_text
+## before the congratulations crawl, and race_update() only pushes the quad
+## when that flag is clear, so the race stays fully lit behind the credits.
+## Split out of _draw() so the choice can be asserted on.
+func dims_background() -> bool:
+	return _stage != Stage.CONGRATULATIONS
+
+
 func _draw() -> void:
 	if _stats.is_empty():
 		return
 
-	# race.c dims the 3D view behind an in-race menu with a half-alpha black quad.
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.0, 0.0, 0.0, 0.5))
+	if dims_background():
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.0, 0.0, 0.0, 0.5))
 
 	match _stage:
 		Stage.STATS:

@@ -40,6 +40,10 @@ var _championship: Node = null
 
 var _orig_lap_records: Dictionary = {}
 var _orig_race_records: Dictionary = {}
+## _check_championship_completed() runs a campaign out, which unlocks the Rapier
+## class on disk (race_next()'s save.has_rapier_class = true).
+var _orig_has_rapier_class: bool = false
+var _orig_has_bonus_circuits: bool = false
 
 
 func _initialize() -> void:
@@ -89,14 +93,19 @@ func _physics_process(_delta: float) -> bool:
 
 	_orig_lap_records = _settings.lap_records.duplicate(true)
 	_orig_race_records = _settings.race_records.duplicate(true)
+	_orig_has_rapier_class = _settings.has_rapier_class
+	_orig_has_bonus_circuits = _settings.has_bonus_circuits
 
 	_check_single_race_with_record()
 	_check_single_race_without_record()
 	_check_championship_with_record()
 	_check_championship_without_qualifying()
+	_check_championship_completed()
 
 	_settings.lap_records = _orig_lap_records
 	_settings.race_records = _orig_race_records
+	_settings.has_rapier_class = _orig_has_rapier_class
+	_settings.has_bonus_circuits = _orig_has_bonus_circuits
 	_settings.save()
 
 	if _failures.is_empty():
@@ -117,6 +126,7 @@ func _check_single_race_with_record() -> void:
 
 	_check("finishing shows the results screen", _results.visible)
 	_check("the results open on RACE STATISTICS", _results._stage == _results.Stage.STATS)
+	_check("the stats page dims the race behind it", _results.dims_background())
 	_check("a placing time is flagged as a new race record", bool(_results._stats.get("is_new_race_record", false)))
 
 	_press_continue()
@@ -170,6 +180,33 @@ func _check_championship_without_qualifying() -> void:
 	_check("failing to qualify goes to the qualify-or-quit confirm", _results._stage == _results.Stage.QUALIFY_OR_QUIT)
 	_check("failing to qualify never reaches RACE POINTS", _results._stage != _results.Stage.RACE_POINTS)
 	_check("failing to qualify never reaches the hall of fame", _results._stage != _results.Stage.HALL_OF_FAME)
+
+
+## race_next()'s "championship complete" branch: winning the last circuit ends
+## on the congratulations crawl rather than loading another race, and that page
+## is the one screen race_update() leaves undimmed (menu_is_scroll_text).
+func _check_championship_completed() -> void:
+	_race_setup.race_type = _race_setup.RACE_TYPE_CHAMPIONSHIP
+	_settings.has_bonus_circuits = false
+	_settings.has_rapier_class = false
+	_championship.reset()
+	# Park the campaign on its final non-bonus circuit.
+	_championship.circuit_index = _championship.NUM_NON_BONUS_CIRCUITS - 1
+	_check("the campaign is on its last circuit", _championship.is_championship_complete())
+
+	# Qualify, but too slowly to place: no hall-of-fame detour in the way.
+	var board: Array = _settings.get_race_records(CIRCUIT, _race_setup.RACE_CLASS_VENOM, false)
+	var slow: float = (float(board[-1]["time"]) + 60.0) / 3.0
+	_finish([slow, slow, slow], 1)
+
+	_press_continue() # stats -> race points
+	_press_continue() # race points -> championship table
+	_press_continue() # championship table -> race_next()
+
+	_check("completing the campaign reaches the congratulations crawl", _results._stage == _results.Stage.CONGRATULATIONS)
+	_check("the crawl is loaded with the venom ending", _results._congratulations_lines == _championship.CONGRATULATIONS_VENOM)
+	_check("finishing the venom campaign unlocks the rapier class", _settings.has_rapier_class)
+	_check("the crawl is the one page that does not dim the race", not _results.dims_background())
 
 
 ## Crosses the line on the last lap with the given per-lap times and rank, the

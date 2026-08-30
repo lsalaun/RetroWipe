@@ -14,12 +14,27 @@ extends SceneTree
 ## onto a single outcome would still "fire weapons" from every other angle, so
 ## the proportions are the check. Each decision is made distinguishable by
 ## seeding the slot with TURBO, a type neither ladder can ever produce.
+##
+## Those samples call _decide_*() directly, which says nothing about whether the
+## running game ever gets there -- the ladders hang off section_diff, and a
+## broken proximity test would leave every one of them unreachable while all the
+## sampling still passed. So the run opens with a live phase (WAIT_FRAMES) that
+## touches nothing but the throttle and counts how often the simulation reaches
+## a decision on its own.
 
-const WAIT_FRAMES := 600
+## Long enough to cover the RaceDirector's UPDATE_TIME_INITIAL hold (~400 frames)
+## plus several UPDATE_TIME_JUST_FRONT decision rounds (200/30 s each) once the
+## grid is racing. Still well inside the first lap, so no lap record is ever
+## submitted to the real save file.
+const WAIT_FRAMES := 1500
 const SAMPLES := 3200
 const TOLERANCE := 0.03
 ## 1.1 s of WEAPON_AI_DELAY at 60 Hz, with room to spare.
 const DELAY_FRAMES := 150
+## Slack around UPDATE_TIME_JUST_FRONT (150/30 s) when spotting a ladder reload.
+## Wide enough for the tick the AI subtracts on the reload frame, narrow enough to
+## exclude the 0.0 resets and the 200/30 s reloads on either side.
+const RELOAD_SLACK := 0.5
 
 var _main: Node3D = null
 var _setup: Node = null
@@ -30,6 +45,23 @@ var _stage := 0
 var _delay_deadline := 0
 var _weapons_before := 0
 var _delay_ai: WipeoutShipAI = null
+
+# Live-race observation: everything below is gathered while the sim drives
+# itself, before any check starts poking at ships directly.
+var _live_phase := true
+var _live_connected := false
+var _live_ai: Array[WipeoutShipAI] = []
+var _live_player: WipeoutShip = null
+var _ai_fires := 0
+var _fired_types := {}
+var _saw_just_in_front := false
+var _saw_just_behind := false
+var _topped_up := 0
+var _decisions := 0
+var _prev_timers := {}
+var _frames_in_front := 0
+var _frames_behind := 0
+var _racing_ai := 0
 
 
 func _initialize() -> void:
@@ -56,9 +88,13 @@ func _physics_process(_delta: float) -> bool:
 	# RaceDirector holds the grid for UPDATE_TIME_INITIAL before GO; the AI is
 	# only meaningfully "racing" well after that.
 	if _frames < WAIT_FRAMES:
+		_observe_live_race()
 		return false
 
 	if _stage == 0:
+		# Everything from here on drives ships by hand, so the live tally closes.
+		_live_phase = false
+		_check_live_race()
 		_run_checks()
 		_stage = 1
 		return false
@@ -68,6 +104,106 @@ func _physics_process(_delta: float) -> bool:
 		_report()
 		return true
 	return false
+
+
+## Watches the race drive itself. Nothing here forces a decision: the ships are
+## where the physics put them, and the ladders run off their own section_diff.
+##
+## The one thing supplied is ammo. ship.c hands an AI `weapon_type = 1` when it
+## drives over a live pad, and whether a given AI happens to cross one inside the
+## window is luck; both ladders do nothing at all with an empty slot, so without a
+## top-up this check would be flaky for a reason unrelated to what it measures.
+## Refilling an empty slot is exactly what a pad does -- the proximity, the timing
+## and the ladder outcome all stay the simulation's own.
+func _observe_live_race() -> void:
+	if _live_ai.is_empty():
+		_live_ai = _find_ai_ships(_main)
+		_live_player = _find_player(_main)
+		# Hold the throttle for the whole run. The DPA measures every AI against
+		# the player, so a parked player is one the field just drives away from:
+		# without this the ships spend ~2% of their frames inside a decision
+		# window instead of ~10%, and the sim barely reaches the ladders at all.
+		Input.action_press(&"ship_thrust")
+	if not _live_connected:
+		var manager := WipeoutWeaponManager.instance(self)
+		if manager != null:
+			manager.weapon_fired.connect(_on_weapon_fired)
+			_live_connected = true
+	if _live_player == null:
+		return
+
+	for ai in _live_ai:
+		if not is_instance_valid(ai):
+			continue
+		# just_in_front is the AI's own flag, set by _update_dpa_ground().
+		if ai.just_in_front:
+			_saw_just_in_front = true
+			_frames_in_front += 1
+		if ai.is_racing:
+			_racing_ai += 1
+		# Detecting a JUST IN FRONT decision needs both halves, and neither alone
+		# works. "The timer jumped up" also catches the four branches that reset it
+		# to 0.0, which reads as a jump because the timer runs negative. "The timer
+		# equals UPDATE_TIME_JUST_FRONT" also catches the countdown sweeping past
+		# 5.0 on its way down from UPDATE_TIME_JUST_BEHIND / _IN_SIGHT -- 6.667 s
+		# lands on exactly 5.0 after 100 frames at 1/60 s, which is how this check
+		# first passed under a mutation that had disabled the decision entirely.
+		# An upward jump landing near 150/30 s is a reload, and only line 434 does
+		# that. "Near" and not "equal": the decision reloads the timer and the same
+		# frame subtracts one tick from it, so from out here the value is always
+		# UPDATE_TIME_JUST_FRONT minus a delta. RELOAD_SLACK brackets that while
+		# staying clear of the 0.0 resets and of the 200/30 s reloads.
+		var id := ai.get_instance_id()
+		var previous: float = _prev_timers.get(id, 0.0)
+		if ai.update_timer > previous \
+				and absf(ai.update_timer - WipeoutShipAI.UPDATE_TIME_JUST_FRONT) < RELOAD_SLACK:
+			_decisions += 1
+		_prev_timers[id] = ai.update_timer
+		# The JUST BEHIND window has no flag, so it is measured from outside with
+		# the same arithmetic ship_ai.c uses: section_diff in [-10, 0].
+		var section_length: float = ai._section_length_meters()
+		if section_length > 0.0:
+			var section_diff: float = (ai.race_progress - _live_player.race_progress) / section_length
+			if section_diff >= -10.0 and section_diff <= 0.0:
+				_saw_just_behind = true
+				_frames_behind += 1
+		if ai.weapon_type == WipeoutWeapon.WeaponType.NONE:
+			ai.weapon_type = WipeoutWeapon.WeaponType.MINE
+			_topped_up += 1
+
+
+func _on_weapon_fired(ship: WipeoutShip, weapon_type: int) -> void:
+	if not _live_phase or ship == null or ship.is_player_controlled:
+		return
+	_ai_fires += 1
+	_fired_types[WipeoutWeapon.weapon_name(weapon_type)] = true
+
+
+## The gap this closes: every other check calls _decide_*() directly, which proves
+## the ladders are right but never that the sim reaches them. Here the only inputs
+## are proximity and time.
+func _check_live_race() -> void:
+	print("  live race over %d frames: just_in_front=%s just_behind=%s" % [
+		WAIT_FRAMES, _saw_just_in_front, _saw_just_behind])
+	print("  JUST IN FRONT ladder entered: %d   ai-frames in front: %d  behind: %d  racing-ai-frames: %d" % [
+		_decisions, _frames_in_front, _frames_behind, _racing_ai])
+	print("  AI shots fired unprompted: %d %s (slot refills: %d)" % [
+		_ai_fires, _fired_types.keys(), _topped_up])
+	if not _saw_just_in_front:
+		_failures.append("no AI ever reached the JUST IN FRONT window in a live race")
+	if not _saw_just_behind:
+		_failures.append("no AI ever reached the JUST BEHIND window in a live race")
+	# The assertion is on ladder entries, not on shots. Whether an entry fires is
+	# a rand_int(0, 64) roll: across runs the field landed 0-2 shots, so "at least
+	# one AI fired" would fail outright a fair share of the time. Entries are the
+	# steadier half -- they fall out of the grid geometry, and runs land on 2-3 --
+	# and they are the half nothing else covers, since every other check calls
+	# _decide_*() by hand. The bar sits at 1 rather than at that 2-3 because both
+	# mutations that sever proximity from the ladder drop it to 0: a higher bar
+	# buys no extra detection and only risks a flake.
+	if _decisions < 1:
+		_failures.append("the sim entered the JUST IN FRONT ladder only %d time(s) in %d frames; proximity no longer drives the DPA" % [
+			_decisions, WAIT_FRAMES])
 
 
 func _run_checks() -> void:

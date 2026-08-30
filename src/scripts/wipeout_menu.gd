@@ -278,6 +278,24 @@ func _horizontal_item_x(index: int) -> float:
 	return -50.0 if index == 0 else 60.0
 
 
+## Adds an off-screen 3D turntable (menu_model_preview.gd) as a child of this
+## menu. Subclasses call this once from _build() to get something to
+## show_model() and _draw_model_preview() from their draw_func, standing in
+## for main_menu.c's draw_model() calls mixed into the original's 2D pass.
+func _add_model_preview() -> MenuModelPreview:
+	return MenuModelPreview.attach(self)
+
+
+## Blits `preview`'s current frame `preview_size` unscaled pixels wide/tall,
+## centred `pos` units from `anchor` -- the same convention circuit_menu.gd
+## and pilot_menu.gd use for their 2D artwork.
+func _draw_model_preview(preview: MenuModelPreview, anchor: Vector2, pos: Vector2, preview_size: Vector2, scale: float) -> void:
+	if preview == null:
+		return
+	var top_left := _anchored(anchor, pos - preview_size * 0.5, scale)
+	draw_texture_rect(preview.get_texture(), Rect2(top_left, preview_size * scale), false)
+
+
 func _text(text: String, anchor: Vector2, offset: Vector2, size: int, color: Color, scale: float) -> void:
 	WipeoutUI.draw_text(self, text, _anchored(anchor, offset, scale), size, color, scale)
 

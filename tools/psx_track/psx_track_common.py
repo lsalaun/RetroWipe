@@ -690,11 +690,17 @@ def emit_prm_object_triangles(
 
         if texture is not None:
             tex_w, tex_h = texture_size(texture)
+        else:
+            tex_w, tex_h = 0, 0
+
+        if tex_w and tex_h:
             uvs = [(u / tex_w, v / tex_h) for u, v in prim["uvs"]]
+            group_key = texture
         else:
             uvs = [(0.0, 0.0)] * len(coords)
+            group_key = None
 
-        group = groups.setdefault(texture, {"positions": [], "uvs": [], "colors": []})
+        group = groups.setdefault(group_key, {"positions": [], "uvs": [], "colors": []})
 
         def emit_tri(engine_order: tuple[int, int, int]) -> None:
             tri_positions = [world_vertices[coords[i]] for i in engine_order]

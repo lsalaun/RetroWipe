@@ -77,8 +77,14 @@ def export_prm(
     transform, reverse_winding = make_axis_transform(flip_z)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    seen_filenames: dict[str, int] = {}
     for index, obj in enumerate(objects):
         filename = f"{prefix}_{safe_filename(obj['name'], index)}" if len(objects) > 1 else prefix
+        if filename in seen_filenames:
+            seen_filenames[filename] += 1
+            filename = f"{filename}_{seen_filenames[filename]}"
+        else:
+            seen_filenames[filename] = 0
         output_path = out_dir / f"{filename}.gltf"
         local_vertices = [scale_point(transform(v), units_per_meter) for v in obj["vertices"]]
         texture_dims: dict[int, tuple[int, int]] = {}

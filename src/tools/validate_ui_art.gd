@@ -1,6 +1,7 @@
 extends SceneTree
 
-## Headless check for title, menu backdrop, portraits, and speedo HUD.
+## Headless check for title, menu backdrop, the pilot menu's logo model, and
+## speedo HUD.
 
 const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
 const ShipSelectionScript := preload("res://scripts/ship_selection.gd")
@@ -42,7 +43,7 @@ func _physics_process(_delta: float) -> bool:
 	if not _check_menu():
 		quit(1)
 		return true
-	if not _check_portraits():
+	if not _check_pilot_model():
 		quit(1)
 		return true
 	if not _check_hud():
@@ -112,18 +113,18 @@ func _check_menu() -> bool:
 	return true
 
 
-func _check_portraits() -> bool:
-	# page_pilot_draw()'s artwork is drawn, so the texture comes off the page.
-	if not _pilot.has_method("portrait_texture"):
+func _check_pilot_model() -> bool:
+	# page_pilot_draw() spins the pilot's PILOT.PRM logo model, resolved by
+	# pilot_menu.gd's model_path_for().
+	if not _pilot.has_method("model_path_for"):
 		push_error("validate_ui_art: PilotMenu is not a WipeoutMenu")
 		return false
-	var portrait := _pilot.portrait_texture(0) as Texture2D
-	if portrait == null:
-		push_error("validate_ui_art: PilotMenu portrait empty")
+	var path := str(_pilot.model_path_for(0))
+	if path == "" or not ResourceLoader.exists(path):
+		push_error("validate_ui_art: PilotMenu model empty (%s)" % path)
 		return false
-	var path := str(portrait.resource_path)
-	if not path.begins_with("res://assets/ui/"):
-		push_error("validate_ui_art: portrait path %s" % path)
+	if not path.begins_with("res://assets/menu_models/pilots/"):
+		push_error("validate_ui_art: pilot model path %s" % path)
 		return false
 	return true
 

@@ -7,18 +7,32 @@ extends WipeoutMenu
 ## adds MENU_FIXED with the top/bottom anchors on the first frame; the flags are
 ## set up front here since the result is the same from frame two onwards.
 ##
-## The original also spins the class's 3D model between the title and the list,
-## and greys out RAPIER CLASS until it is unlocked. Neither the menu models nor
-## a save file with unlocks exist in this port.
+## page_race_class_draw() also spins the class's LEEG.PRM model between the
+## title and the list (models.race_classes[data]); _draw_model swaps it per
+## selection. Greying out RAPIER CLASS until it is unlocked is still not done:
+## no save file with unlocks exists in this port.
 
 const MAIN_MENU := "res://scenes/MainMenu.tscn"
 const RACE_TYPE_MENU := "res://scenes/RaceTypeMenu.tscn"
 
+## page_race_class_draw(): draw_model(..., vec2(0, -0.2), vec3(0, 0, -350), ...).
+const PREVIEW_POS := Vector2(0.0, -40.0)
+const PREVIEW_SIZE := Vector2(96.0, 96.0)
+
+## models.race_classes[], LEEG.PRM's load order, one glb per RACE_CLASS_* value.
+const MODEL_PATHS: Array[String] = [
+	"res://assets/menu_models/race_classes/venom/venom.glb",
+	"res://assets/menu_models/race_classes/rapier/rapier.glb",
+]
+
+var _preview: MenuModelPreview
+
 
 func _build() -> void:
 	back_scene = MAIN_MENU
+	_preview = _add_model_preview()
 
-	var page := push_page("SELECT RACING CLASS")
+	var page := push_page("SELECT RACING CLASS", _draw_model)
 	page.layout_flags |= FIXED
 	page.title_pos = Vector2(0.0, 30.0)
 	page.title_anchor = TOP_CENTER
@@ -27,6 +41,13 @@ func _build() -> void:
 
 	for i in RaceSetup.RACE_CLASSES.size():
 		page.add_button(i, RaceSetup.RACE_CLASSES[i], _select_class)
+
+
+func _draw_model(data: int, scale: float) -> void:
+	if data < 0 or data >= MODEL_PATHS.size():
+		return
+	_preview.show_model(MODEL_PATHS[data])
+	_draw_model_preview(_preview, MIDDLE_CENTER, PREVIEW_POS, PREVIEW_SIZE, scale)
 
 
 func _select_class(data: int) -> void:

@@ -3,24 +3,43 @@ extends WipeoutMenu
 ## Pilot selection: src/wipeout/main_menu.c's page_pilot_init. Pilots are
 ## restricted to the team chosen on TeamMenu.tscn.
 ##
-## page_pilot_draw() spins the pilot's 3D logo model above the list. That model
-## is not imported here, so the page shows the pilot's CMP portrait
-## (def.pilots[].portrait, frame 0) in the same spot instead.
+## page_pilot_draw() spins models.pilots[def.pilots[data].logo_model] above the
+## list. PILOT.PRM objects keep their own dev names rather than the pilot's
+## (Paul Jackson's is still named "leroy"), so PILOT_LOGO_MODEL below maps
+## pilot name -> glb directly instead of re-deriving the logo_model indices.
+## def.pilots[].portrait (the CMP portrait this page used to show as a
+## stand-in) is drawn on the race HUD instead (see ingame_menus.c); it is not
+## part of this page in the original either.
 
 const TEAM_MENU := "res://scenes/TeamMenu.tscn"
 const CIRCUIT_MENU := "res://scenes/CircuitMenu.tscn"
 
-## Where page_circuit_draw() puts its artwork, reused for the portrait.
-const PORTRAIT_POS := Vector2(0.0, -25.0)
+## page_pilot_draw(): draw_model(..., vec2(0, -0.2), vec3(0, 0, -10000), ...).
+const PREVIEW_POS := Vector2(0.0, -45.0)
+const PREVIEW_SIZE := Vector2(110.0, 110.0)
+
+## def.pilots[].logo_model, resolved ahead of time to the PILOT.PRM object each
+## index names.
+const PILOT_LOGO_MODEL: Dictionary = {
+	"John Dekka": "res://assets/menu_models/pilots/dekka/dekka.glb",
+	"Daniel Chang": "res://assets/menu_models/pilots/chang/chang.glb",
+	"Arial Tetsuo": "res://assets/menu_models/pilots/arial/arial.glb",
+	"Anastasia Cherovoski": "res://assets/menu_models/pilots/anasta/anasta.glb",
+	"Kel Solaar": "res://assets/menu_models/pilots/solaar/solaar.glb",
+	"Arian Tetsuo": "res://assets/menu_models/pilots/arian/arian.glb",
+	"Sofia De La Rente": "res://assets/menu_models/pilots/sophia/sophia.glb",
+	"Paul Jackson": "res://assets/menu_models/pilots/leroy/leroy.glb",
+}
 
 var _pilots: Array[Dictionary] = []
-var _portraits: Array[Texture2D] = []
+var _preview: MenuModelPreview
 
 
 func _build() -> void:
 	back_scene = TEAM_MENU
+	_preview = _add_model_preview()
 
-	var page := push_page("CHOOSE YOUR PILOT", _draw_portrait)
+	var page := push_page("CHOOSE YOUR PILOT", _draw_model)
 	page.layout_flags |= FIXED
 	page.title_pos = Vector2(0.0, 30.0)
 	page.title_anchor = TOP_CENTER
@@ -35,27 +54,19 @@ func _build() -> void:
 	for i in _pilots.size():
 		var ship := _pilots[i]
 		page.add_button(i, str(ship["pilot"]), _select_pilot)
-		var path := str(ship.get("portrait", ""))
-		if path != "" and ResourceLoader.exists(path):
-			_portraits.append(load(path) as Texture2D)
-		else:
-			_portraits.append(null)
 
 
-## The portrait shown for entry `index`, or null when the CMP export is missing.
-func portrait_texture(index: int) -> Texture2D:
-	if index < 0 or index >= _portraits.size():
-		return null
-	return _portraits[index]
+## The PILOT.PRM glb shown for entry `index`, or "" when out of range.
+func model_path_for(index: int) -> String:
+	if index < 0 or index >= _pilots.size():
+		return ""
+	var pilot := str(_pilots[index].get("pilot", ""))
+	return str(PILOT_LOGO_MODEL.get(pilot, ""))
 
 
-func _draw_portrait(data: int, scale: float) -> void:
-	var texture := portrait_texture(data)
-	if texture == null:
-		return
-	var portrait_size := Vector2(texture.get_size())
-	var top_left := _anchored(MIDDLE_CENTER, PORTRAIT_POS - portrait_size * 0.5, scale)
-	draw_texture_rect(texture, Rect2(top_left, portrait_size * scale), false)
+func _draw_model(data: int, scale: float) -> void:
+	_preview.show_model(model_path_for(data))
+	_draw_model_preview(_preview, MIDDLE_CENTER, PREVIEW_POS, PREVIEW_SIZE, scale)
 
 
 func _select_pilot(data: int) -> void:

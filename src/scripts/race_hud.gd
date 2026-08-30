@@ -5,9 +5,8 @@ extends Control
 ## WRONG WAY warning and the optional FPS readout -- all drawn with the original
 ## DRFONTS bitmap font through WipeoutUI, at the layout coordinates hud.c uses.
 ##
-## The speedo lives in the Speedo child (hud_speedo.gd). Weapon icon, target
-## reticle and championship lives are not drawn: weapons and championship lives
-## are not ported yet.
+## The speedo lives in the Speedo child (hud_speedo.gd). Target reticle and
+## championship lives are not drawn yet.
 ##
 ## hud.c positions everything in ui.c's virtual units and multiplies by the
 ## global ui_scale; HUD_SCALE plays that role here. 3.125 is the ratio the
@@ -23,14 +22,20 @@ const DEFAULT := WipeoutUI.COLOR_DEFAULT
 
 ## Anchors from ui.c's ui_scaled_pos() flags, as fractions of the screen.
 const TOP_LEFT := Vector2(0.0, 0.0)
+const TOP_CENTER := Vector2(0.5, 0.0)
 const TOP_RIGHT := Vector2(1.0, 0.0)
 const BOTTOM_LEFT := Vector2(0.0, 1.0)
 const MIDDLE_CENTER := Vector2(0.5, 0.5)
+
+## hud.c: render_push_2d() draws the WICONS sprite into a fixed 32x32
+## (ui-scaled) box regardless of the source frame's own size.
+const WEAPON_ICON_SIZE := 32.0
 
 @onready var speedo: Control = $Speedo
 
 var _ship: WipeoutShip = null
 var _director: RaceDirector = null
+var _weapon_icons: Dictionary = {}
 
 
 func _ready() -> void:
@@ -118,18 +123,29 @@ func _draw_stats() -> void:
 	WipeoutUI.draw_text(self, str(frame_ms), _at(Vector2(64, 90)), SIZE_8, DEFAULT, HUD_SCALE)
 
 
-## hud.c draws the held weapon as a WICONS sprite centred at the top of the
-## screen. Those icons are not imported yet, so the name is drawn as text in the
-## same spot, with the SHIELD readout while one is up.
+## hud.c: the held weapon as a WICONS.CMP sprite, 32x32, centred at the top of
+## the screen. weapon_type-1 indexes the CMP frame directly (WEAPON_TYPE_MINE=1
+## .. WEAPON_TYPE_TURBO=9, WICONS frames 0-8). No separate SHIELD readout: the
+## original shows nothing once the shield weapon fires either (ship->weapon_type
+## resets to WEAPON_TYPE_NONE the instant weapons_fire() hands it off, same as
+## fire_weapon() here) -- shield_active driving its own effect afterwards is a
+## camera/ship concern, not a HUD one.
 func _draw_weapon() -> void:
-	if _ship.shield_active:
-		WipeoutUI.draw_text_centered(self, "SHIELD", _at(Vector2(0, 8), Vector2(0.5, 0.0)), SIZE_8, ACCENT, HUD_SCALE)
+	if _ship.weapon_type == WipeoutWeapon.WeaponType.NONE:
 		return
+	var texture := _weapon_icon(_ship.weapon_type)
+	if texture == null:
+		return
+	var top_left := _at(Vector2(-16, 20), TOP_CENTER)
+	draw_texture_rect(texture, Rect2(top_left, Vector2(WEAPON_ICON_SIZE, WEAPON_ICON_SIZE) * HUD_SCALE), false)
 
-	var label := WipeoutWeapon.weapon_name(_ship.weapon_type)
-	if label.is_empty():
-		return
-	WipeoutUI.draw_text_centered(self, label, _at(Vector2(0, 8), Vector2(0.5, 0.0)), SIZE_16, DEFAULT, HUD_SCALE)
+
+## wicons.cmp, exported by convert_textures.py as one PNG per frame.
+func _weapon_icon(weapon_type: int) -> Texture2D:
+	if not _weapon_icons.has(weapon_type):
+		var path := "res://assets/ui/wicons/wicons_%02d.png" % (weapon_type - 1)
+		_weapon_icons[weapon_type] = load(path) as Texture2D if ResourceLoader.exists(path) else null
+	return _weapon_icons[weapon_type]
 
 
 func _draw_wrong_way() -> void:

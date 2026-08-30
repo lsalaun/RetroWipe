@@ -298,8 +298,8 @@ func _deactivate() -> void:
 	queue_free()
 
 
-## Short label for the HUD. hud.c draws a WICONS sprite here instead; those icons
-## are not imported yet, so the port shows the name as text.
+## Short diagnostic label (validate_weapon_pads.gd). race_hud.gd draws the real
+## WICONS.CMP sprite instead of this for the in-race HUD.
 static func weapon_name(wtype: WeaponType) -> String:
 	match wtype:
 		WeaponType.MINE: return "MINES"

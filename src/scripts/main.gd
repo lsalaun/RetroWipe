@@ -25,6 +25,7 @@ func _ready() -> void:
 	var center_line := track.get_node_or_null("CenterLine") as Path3D
 	var spawn := track.get_node_or_null("ShipSpawn") as Marker3D
 	var start_line_offset := _start_line_offset(center_line, track_scene)
+	var spawn_offset := _spawn_offset(center_line, track_scene)
 
 	_clear_placeholder_ai()
 	var player := _find_player_ship()
@@ -34,7 +35,7 @@ func _ready() -> void:
 	if RaceSetup.race_type == RaceSetup.RACE_TYPE_TIME_TRIAL:
 		player.center_line = center_line
 		player.start_line_offset = start_line_offset
-		RaceFieldScript.place_ship(player, spawn, RaceFieldScript.NUM_PILOTS - 1)
+		RaceFieldScript.place_ship(player, spawn, center_line, spawn_offset, RaceFieldScript.NUM_PILOTS - 1)
 		if ShipSelection.selected_ship_scene != null:
 			player.set_ship_model(ShipSelection.selected_ship_scene)
 		_apply_ship_attributes(player, RaceSetup.pilot_name)
@@ -61,7 +62,7 @@ func _ready() -> void:
 				continue
 		ship.center_line = center_line
 		ship.start_line_offset = start_line_offset
-		RaceFieldScript.place_ship(ship, spawn, i)
+		RaceFieldScript.place_ship(ship, spawn, center_line, spawn_offset, i)
 		var mesh_path := str(entry.get("mesh", ""))
 		if mesh_path != "":
 			var mesh_scene := load(mesh_path) as PackedScene
@@ -84,6 +85,19 @@ func _start_line_offset(center_line: Path3D, track_scene: PackedScene) -> float:
 	var curve := center_line.curve
 	var section := TrackSelection.start_line_section_for(track_scene.resource_path)
 	var index := posmod(section, curve.point_count)
+	return curve.get_closest_offset(curve.get_point_position(index))
+
+
+## Same idea, but for ShipSpawn's own curve point (start_line - 15, ships_init()'s
+## "BASE" section) -- computed from the section index rather than the marker's
+## world position so it's exact even though the marker itself sits 2 m higher
+## (compute_ship_spawn.py's hover clearance).
+func _spawn_offset(center_line: Path3D, track_scene: PackedScene) -> float:
+	if center_line == null or center_line.curve == null or center_line.curve.point_count < 2:
+		return 0.0
+	var curve := center_line.curve
+	var line_section := TrackSelection.start_line_section_for(track_scene.resource_path)
+	var index := posmod(line_section - TrackSelection.SPAWN_SECTION_OFFSET, curve.point_count)
 	return curve.get_closest_offset(curve.get_point_position(index))
 
 

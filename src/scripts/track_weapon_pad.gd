@@ -10,7 +10,13 @@ class_name TrackWeaponPad
 ## has to have an empty slot. `respawn_time` is a gameplay addition that stops a
 ## single pad from re-arming a ship that camps on it.
 
-@export var box_size: Vector3 = Vector3(6.0, 5.0, 6.0)
+## Wider/longer/taller than the original 6x5x6, same reasoning (and same new
+## size) as TrackBoostPad's box_size: the pad is spawned axis-aligned at the
+## flagged face's centre (track_gameplay_zones.gd), not rotated to the
+## track's local direction there, so a generous box is what keeps a ship
+## travelling at speed (or hovering a bit high) from clipping past the pad
+## without ever overlapping it.
+@export var box_size: Vector3 = Vector3(10.0, 6.0, 10.0)
 @export var weapon_class: int = 1 # WipeoutWeaponManager.WEAPON_CLASS_ANY
 @export var respawn_time: float = 5.0
 @export var pad_color: Color = Color(1.0, 0.84, 0.0)

@@ -191,6 +191,10 @@ var roll_rate: float = 0.0
 var visual_pitch: float = 0.0
 var wall_impact_cooldown: float = 0.0
 var ship_impact_cooldown: float = 0.0
+## ship.h SHIP_COLL: set while a pair is resting in contact, so the crunch fires
+## on the frame contact begins and not on every frame it lasts. Owned by
+## ShipCollisionManager, which is the only thing that sees a pair.
+var ship_colliding: bool = false
 
 ## ship_player.c's four reserved loops (thrust/intake/shield/turbulence) for the
 ## player, and ship_ai.c's single positional SFX_ENGINE_REMOTE for everyone
@@ -252,8 +256,6 @@ func _ready() -> void:
 	_snap_camera_to_ship()
 	if ship_model_scene != null:
 		set_ship_model(ship_model_scene)
-	if hull_area != null:
-		hull_area.area_entered.connect(_on_hull_area_entered)
 	# Same distance curve as every other positional sample in the port.
 	WipeoutAudio.configure_3d_falloff(wall_impact_sfx)
 	WipeoutAudio.configure_3d_falloff(ship_impact_sfx)
@@ -267,16 +269,12 @@ func _ready() -> void:
 			trail_mesh.global_transform = Transform3D.IDENTITY
 
 
-## Godot-idiomatic stand-in for ship.c's `last_impact_time`-gated `sfx_play_at()`:
-## triggered straight off HullArea's own `area_entered` signal instead of a
-## polled per-frame timer, and played through a plain AudioStreamPlayer3D.
-func _on_hull_area_entered(area: Area3D) -> void:
-	if ship_impact_cooldown > 0.0:
-		return
-	if not (area.get_parent() is WipeoutShip):
-		return
-	ship_impact_cooldown = ship_impact_cooldown_duration
-	_play_sfx(ship_impact_sfx, ship_impact_sound, global_position)
+## ship.c's `last_impact_time`-gated `sfx_play_at()`. The gating and the position
+## belong to ShipCollisionManager: the original plays one SFX_CRUNCH per *pair*,
+## at the midpoint, and a ship on its own cannot know either of those. Driving it
+## from each hull's own area_entered instead played the collision twice.
+func play_ship_impact(at_position: Vector3) -> void:
+	_play_sfx(ship_impact_sfx, ship_impact_sound, at_position)
 
 
 ## Same idea for wall impacts: no `last_impact_time` port, just a plain

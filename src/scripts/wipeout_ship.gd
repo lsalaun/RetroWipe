@@ -53,9 +53,9 @@ const NEUTRAL_INPUTS := {
 @export var thrust_max: float = 72.0
 @export var thrust_ramp: float = 42.0
 @export var thrust_falloff: float = 20.0 # original ramps thrust down at half the ramp-up rate (SHIP_THRUST_FALLOFF = SHIP_THRUST_RATE / 2)
-@export var engine_flame_idle_length: float = 0.5 # ship.c's exhaust_len never fully collapses to zero; a small idle plume remains even at rest
-@export var engine_flame_max_length: float = 2.6 # additional length at full thrust_mag, ported ratio of ship.c's `thrust_mag * 0.0625` term
-@export var engine_flame_speed_length: float = 1.4 # additional length from current speed, ported ratio of ship.c's `speed * 0.00390625` term
+@export var engine_flame_idle_length: float = 0.22 # ship.c's exhaust_len never fully collapses to zero; a small idle plume remains even at rest
+@export var engine_flame_max_length: float = 1.0 # additional length at full thrust_mag, ported ratio of ship.c's `thrust_mag * 0.0625` term -- kept short, matching the stubby nozzle plume of the original renderer rather than a long trail
+@export var engine_flame_speed_length: float = 0.45 # additional length from current speed, ported ratio of ship.c's `speed * 0.00390625` term
 @export var engine_flame_speed_reference: float = 90.0 # speed (m/s) at which the speed-based stretch term reaches its full contribution
 @export var engine_flame_jitter: float = 0.15 # ported from ship.c's per-frame vec3_rand(7) plume jitter
 @export var engine_flame_glow_energy: float = 1.4 # peak OmniLight3D energy per nozzle at full thrust/speed, for a subtle light bounce onto the track under the ship

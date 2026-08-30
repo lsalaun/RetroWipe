@@ -31,35 +31,35 @@ albedo_color = Color(0.92549, 0.352941, 0.301961, 1)
 roughness = 0.4
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_flame_outer"]
-top_radius = 0.02
-bottom_radius = 0.22
+top_radius = 0.025
+bottom_radius = 0.2
 height = 1.0
-radial_segments = 16
+radial_segments = 20
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_flame_outer"]
 transparency = 1
 shading_mode = 0
 cull_mode = 2
-albedo_color = Color(0.85098, 0.207843, 0.121569, 0.28)
+albedo_color = Color(0.803922, 0.478431, 0.211765, 0.32)
 emission_enabled = true
-emission = Color(0.85098, 0.207843, 0.121569, 1)
-emission_energy_multiplier = 0.5
+emission = Color(0.803922, 0.478431, 0.211765, 1)
+emission_energy_multiplier = 0.45
 blend_mode = 1
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_flame_inner"]
-top_radius = 0.01
-bottom_radius = 0.09
+top_radius = 0.012
+bottom_radius = 0.1
 height = 1.0
-radial_segments = 12
+radial_segments = 20
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_flame_inner"]
 transparency = 1
 shading_mode = 0
 cull_mode = 2
-albedo_color = Color(0.984314, 0.415686, 0.223529, 0.45)
+albedo_color = Color(0.968627, 0.647059, 0.309804, 0.55)
 emission_enabled = true
-emission = Color(0.984314, 0.415686, 0.223529, 1)
-emission_energy_multiplier = 0.8
+emission = Color(0.968627, 0.647059, 0.309804, 1)
+emission_energy_multiplier = 0.7
 blend_mode = 1
 
 [node name="WipeoutShip" type="Node3D"]

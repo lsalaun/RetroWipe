@@ -4,7 +4,11 @@ class_name ShipCollisionManager
 ## Ported from ship.c's ship_collide_with_ship(): resolves every ship pair once per
 ## physics frame (race/scene-level, not per-ship) to avoid double-processing A<->B.
 
-@export var detection_distance: float = 6.0 # quick reject before the precise HullArea overlap test
+## Quick reject before the precise HullArea overlap test. Must clear the hull
+## box's own full diagonal (4.23 x 1.05 x 8.45, see WipeoutShip.tscn's
+## BoxShape3D_hull_area) or two ships approaching nose-to-tail could overlap
+## before this check ever lets the Area3D test run.
+@export var detection_distance: float = 9.6
 @export var push_k: float = 2.5
 
 

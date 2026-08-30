@@ -83,6 +83,20 @@ func start_race(tree: SceneTree) -> void:
 	tree.change_scene_to_file(LOADING_SCENE)
 
 
+## RaceSetup.start_attract_mode()'s track pick: any TRACKS entry whose Venom/
+## Rapier suffix matches `race_class_value`.
+func random_track_scene_for(race_class_value: int) -> PackedScene:
+	var want_rapier := race_class_value == RAPIER_CLASS
+	var candidates: Array[Dictionary] = []
+	for track in TRACKS:
+		if str(track["name"]).ends_with(" RAPIER") == want_rapier:
+			candidates.append(track)
+	if candidates.is_empty():
+		candidates = TRACKS
+	var pick: Dictionary = candidates[randi() % candidates.size()]
+	return load(str(pick["scene"])) as PackedScene
+
+
 ## def.circuits order for the seven WIPEOUT circuits (game.h, CIRCUIT_ALTIMA_VII
 ## .. CIRCUIT_FIRESTAR). main_menu.c's page_circuit_init lists them in this
 ## order, and track.cmp's preview images are indexed by the same enum.

@@ -137,6 +137,10 @@ func _on_lap_completed(ship: WipeoutShip, lap_index: int, time: float) -> void:
 	if ship != player:
 		return
 	player_lap_completed.emit(lap_index, time)
+	if RaceSetup.is_attract_mode:
+		# The demo's "player" is an AI ship too: it just keeps circulating
+		# instead of submitting a lap record or popping the results screen.
+		return
 	if ship.lap >= NUM_LAPS:
 		_end_race()
 

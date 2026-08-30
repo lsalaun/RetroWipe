@@ -51,6 +51,12 @@ var race_type: int = RACE_TYPE_CHAMPIONSHIP
 var team_name: String = ""
 var pilot_name: String = ""
 
+## title.c's g.is_attract_mode: true for the demo race TitleScreen starts after
+## an idle timeout. main.gd fills every grid slot with an AI ship while this is
+## set, and race_director.gd skips lap-record submission/race_finished so a
+## demo lap can't clobber the player's real records or pop the results screen.
+var is_attract_mode: bool = false
+
 
 func select_race_class(value: int) -> void:
 	race_class = value
@@ -116,3 +122,15 @@ func attributes_for(team: String, race_class_value: int = -1) -> Resource:
 
 func attributes_for_pilot(pilot: String, race_class_value: int = -1) -> Resource:
 	return attributes_for(team_for_pilot(pilot), race_class_value)
+
+
+## title.c's attract-mode trigger: a random pilot/class/circuit single race,
+## loaded straight into main.tscn (no loading-card button press to wait on).
+func start_attract_mode(tree: SceneTree) -> void:
+	is_attract_mode = true
+	race_type = RACE_TYPE_SINGLE
+	race_class = randi() % RACE_CLASSES.size()
+	select_pilot(ShipSelection.SHIPS[randi() % ShipSelection.SHIPS.size()])
+	team_name = team_for_pilot(pilot_name)
+	TrackSelection.selected_track_scene = TrackSelection.random_track_scene_for(race_class)
+	tree.change_scene_to_file(TrackSelection.RACE_SCENE)

@@ -10,7 +10,12 @@ class_name TrackBoostPad
 ## wipeout_ship.gd's tuning note on hand-tuned constants vs. literal PSX conversion).
 
 @export var boost_accel: float = 160.0 # additive velocity along the ship's forward axis, m/s^2
-@export var box_size: Vector3 = Vector3(6.0, 4.0, 6.0)
+## Wider/longer/taller than the original 6x4x6: the pad is spawned axis-aligned
+## at the flagged face's centre (track_gameplay_zones.gd), not rotated to the
+## track's local direction at that point, so a generous box is what keeps a
+## ship travelling at speed (or hovering a bit high over a bump) from clipping
+## past the strip without ever overlapping it.
+@export var box_size: Vector3 = Vector3(10.0, 6.0, 10.0)
 
 
 func _ready() -> void:

@@ -141,6 +141,13 @@ const ENGINE_NOZZLE_OFFSETS := {
 @export var void_fall_margin: float = 25.0 # how far below the racing line (or last grounded height if no curve) counts as a fall into the void — not an absolute world Y, and not the last crest Y
 @export var center_line: Path3D # track center line used to rescue the ship back onto the track
 @export var is_player_controlled: bool = true
+## Whether is_player_controlled also selects ship_player.c's cockpit engine mix
+## (non-positional intake/thrust/turbulence loops) over ship_ai.c's positional
+## remote loop. Attract mode clears it on its DPA reference ship: that ship
+## carries the flag for ranking and section_diff, but attract_camera.gd puts the
+## camera anywhere on the track, so a cockpit mix would be heard from a vantage
+## the listener is nowhere near. See main.gd's _setup_attract_race().
+@export var use_cockpit_audio: bool = true
 @export var handling: Resource
 @export var ship_model_scene: PackedScene # imported ship .glb (see tools/psx_track/convert_ships.py); null keeps the placeholder BodyMesh
 ## Shrinks HullArea's BoxShape3D (measured from ALCOL.PRM, see ship_collision_manager.gd
@@ -322,7 +329,7 @@ func _update_engine_sfx() -> void:
 	# the original's 0..0.5 working range.
 	var speedf: float = clampf(velocity.length() / (2.0 * SPEEDO_FULL_SPEED), 0.0, 0.5)
 
-	if not is_player_controlled:
+	if not _has_cockpit_audio():
 		# The remotes are audible for the whole race; only their distance to the
 		# camera moves them, which AudioStreamPlayer3D already does.
 		_set_loop_volume(_engine_remote_sfx, 0.5 if is_racing else 0.0)
@@ -354,9 +361,14 @@ func _set_loop_volume(player: Node, volume: float) -> void:
 	player.volume_db = -80.0 if muted else linear_to_db(minf(volume, 1.0))
 
 
+## ship_player.c's cockpit mix vs ship_ai.c's positional remote loop.
+func _has_cockpit_audio() -> bool:
+	return is_player_controlled and use_cockpit_audio
+
+
 func _build_engine_sfx() -> void:
 	_engine_sfx_ready = true
-	if is_player_controlled:
+	if _has_cockpit_audio():
 		_engine_thrust_sfx = _add_loop_player("EngineThrustSFX", ENGINE_THRUST_SFX)
 		_engine_intake_sfx = _add_loop_player("EngineIntakeSFX", ENGINE_INTAKE_SFX)
 		_shield_sfx = _add_loop_player("ShieldSFX", SHIELD_SFX)

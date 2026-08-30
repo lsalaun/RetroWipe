@@ -165,7 +165,7 @@ func _check_attract_grid() -> bool:
 		push_error("expected %d ships, got %d" % [NUM_PILOTS, ships.size()])
 		return false
 
-	var pov_count := 0
+	var reference_count := 0
 	var ai_count := 0
 	for node in ships:
 		var ship := node as WipeoutShip
@@ -176,18 +176,23 @@ func _check_attract_grid() -> bool:
 			push_error("%s is not AI-driven in attract mode" % ship.name)
 			return false
 		ai_count += 1
+		# No ship may hold the active camera: attract_camera.gd owns the view.
+		var cam := ship.camera_rig.get_node_or_null("Camera3D") as Camera3D
+		if cam != null and cam.current:
+			push_error("%s still holds the active camera in attract mode" % ship.name)
+			return false
 		if ship.is_player_controlled:
-			pov_count += 1
-			var cam := ship.camera_rig.get_node_or_null("Camera3D") as Camera3D
-			if cam == null or not cam.current:
-				push_error("POV ship %s has no active camera" % ship.name)
+			reference_count += 1
+			if ship.use_cockpit_audio:
+				push_error("DPA reference %s must not use the cockpit audio mix" % ship.name)
 				return false
 
 	if ai_count != NUM_PILOTS:
 		push_error("expected all %d ships to be AI, got %d" % [NUM_PILOTS, ai_count])
 		return false
-	if pov_count != 1:
-		push_error("expected exactly 1 POV ship, got %d" % pov_count)
+	# race.c keeps exactly one g.pilot as the DPA / ranking reference.
+	if reference_count != 1:
+		push_error("expected exactly 1 DPA reference ship, got %d" % reference_count)
 		return false
 
 	if int(_director.state) != STATE_COUNTDOWN:
@@ -197,8 +202,90 @@ func _check_attract_grid() -> bool:
 		push_error("RaceDirector did not pick up the POV ship as player")
 		return false
 
-	print("attract grid OK: ships=", ships.size(), " pov=", (_director.player as WipeoutShip).name)
+	print("attract grid OK: ships=", ships.size(), " reference=", (_director.player as WipeoutShip).name)
+	return _check_attract_camera(ships)
+
+
+## attract_camera.gd: the camera owns the view, cuts between treatments, tours
+## the field, and always ends a frame aimed at its subject. Rolls are driven by
+## hand rather than by waiting out VIEW_DURATION per cut, the way
+## validate_race_logic.gd calls ship._update_race_progress() directly.
+func _check_attract_camera(ships: Array) -> bool:
+	var camera = _main.get_node_or_null("AttractCamera")
+	if camera == null:
+		push_error("expected an AttractCamera node in attract mode")
+		return false
+	if not camera.current:
+		push_error("AttractCamera is not the active camera")
+		return false
+	if camera._subject == null:
+		push_error("AttractCamera has no subject after setup()")
+		return false
+
+	var subjects_seen := {}
+	var modes_seen := {}
+	for i in 40:
+		camera._roll_view()
+		var subject: WipeoutShip = camera._subject
+		if subject == null:
+			push_error("roll %d left the camera without a subject" % i)
+			return false
+		if not ships.has(subject):
+			push_error("roll %d picked a subject outside the field: %s" % [i, subject.name])
+			return false
+		subjects_seen[subject.name] = true
+		modes_seen[int(camera._mode)] = true
+
+		# Both treatments stand off the subject and aim at it.
+		var to_subject: Vector3 = subject.global_position - camera.global_position
+		if to_subject.length() < 0.5:
+			push_error("roll %d put the camera inside its subject" % i)
+			return false
+		var aim: float = (-camera.global_transform.basis.z).dot(to_subject.normalized())
+		if aim < 0.999:
+			push_error("roll %d left the camera aimed off-subject (dot=%s)" % [i, str(aim)])
+			return false
+
+	# The roaming this whole change is about: 40 rolls over 8 ships must visit
+	# more than one of them, and must exercise both camera treatments.
+	if subjects_seen.size() < 2:
+		push_error("camera never left its first subject over 40 rolls")
+		return false
+	if modes_seen.size() != 2:
+		push_error("expected both ORBIT and STATIC treatments, saw %s" % str(modes_seen.keys()))
+		return false
+
+	# A STATIC view is a fixed vantage: the position must not drift between
+	# frames, unlike ORBIT which walks its circle.
+	if not _roll_until_mode(camera, 1): # AttractCamera.Mode.STATIC
+		return false
+	var parked: Vector3 = camera.global_position
+	camera._process(0.1)
+	if camera.global_position.distance_to(parked) > 0.001:
+		push_error("a STATIC view must hold its vantage, moved %s" % str(camera.global_position.distance_to(parked)))
+		return false
+
+	if not _roll_until_mode(camera, 0): # AttractCamera.Mode.ORBIT
+		return false
+	var orbit_from: Vector3 = camera.global_position
+	camera._process(1.0)
+	if camera.global_position.distance_to(orbit_from) < 0.01:
+		push_error("an ORBIT view must walk its circle, but the camera stood still")
+		return false
+
+	print("attract camera OK: subjects=", subjects_seen.size(), "/", ships.size(), " modes=", modes_seen.keys())
 	return true
+
+
+## Re-rolls until the camera lands on `mode`. The roll is a coin flip, so this
+## is bounded rather than a `while`: a validator must not be able to hang.
+func _roll_until_mode(camera, mode: int) -> bool:
+	for i in 200:
+		if int(camera._mode) == mode:
+			return true
+		camera._roll_view()
+	push_error("camera never rolled into mode %d over 200 rolls" % mode)
+	return false
 
 
 # -----------------------------------------------------------------------------

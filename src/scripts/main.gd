@@ -1,6 +1,7 @@
 extends Node3D
 
 const RaceFieldScript = preload("res://scripts/race_field.gd")
+const AttractCameraScript = preload("res://scripts/attract_camera.gd")
 
 const TITLE_SCENE := "res://scenes/TitleScreen.tscn"
 
@@ -180,7 +181,11 @@ func _setup_attract_race(center_line: Path3D, spawn: Marker3D, start_line_offset
 
 	var start_order := RaceFieldScript.build_start_order("")
 	var circuit := RaceFieldScript.circuit_settings_for(RaceFieldScript.track_display_name(), RaceSetup.race_class)
-	var pov_index := start_order.size() - 1
+	# race.c's g.pilot: attract mode picks one pilot at random and every DPA
+	# section_diff is still measured against that ship, so one slot has to carry
+	# the flag even though nobody is driving it.
+	var reference_index := randi() % start_order.size()
+	var ships: Array[WipeoutShip] = []
 
 	for i in start_order.size():
 		var entry: Dictionary = start_order[i]
@@ -200,14 +205,32 @@ func _setup_attract_race(center_line: Path3D, spawn: Marker3D, start_line_offset
 		_apply_ship_attributes(ship, str(entry.get("pilot", "")), str(entry.get("team", "")))
 		var settings := RaceFieldScript.ai_settings_for(RaceSetup.race_class, inv_rank)
 		ship.configure_from_race(settings, circuit, inv_rank)
+		ships.append(ship)
 
-		if i == pov_index:
-			# WipeoutShipAI._ready() already cleared these; flip them back so
-			# this one slot gets the normal player camera-chase and audio.
+		if i == reference_index:
+			# Stands in for g.ships[g.pilot]: the DPA reference (ship_ai.c's
+			# _find_player) and RaceDirector's `player`. The camera is *not* on
+			# it -- attract_camera.gd roams the field instead -- so its engine
+			# has to stay a positional remote rather than the cockpit mix
+			# is_player_controlled would otherwise select.
 			ship.is_player_controlled = true
-			var cam := ship.camera_rig.get_node_or_null("Camera3D") as Camera3D
-			if cam != null:
-				cam.current = true
+			ship.use_cockpit_audio = false
+
+	_add_attract_camera(ships, center_line)
+
+
+## camera.c: race_init() hands the demo to camera_update_attract_random(). The
+## camera is a free node here rather than a ship child, since a STATIC view has
+## to stand still on the track while its subject flies past it.
+func _add_attract_camera(ships: Array[WipeoutShip], center_line: Path3D) -> Camera3D:
+	# Preloaded rather than named as AttractCamera, like RaceFieldScript above:
+	# the global class cache is only rebuilt on import, so a fresh class_name is
+	# not resolvable under `godot -s` (see tools/validate_attract_mode.gd).
+	var camera: Camera3D = AttractCameraScript.new()
+	camera.name = "AttractCamera"
+	add_child(camera)
+	camera.setup(ships, center_line)
+	return camera
 
 
 func _hide_hud() -> void:

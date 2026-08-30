@@ -28,6 +28,28 @@ const NEUTRAL_INPUTS := {
 	"brake_right": false,
 }
 
+## Per-hull nozzle anchor (x, y, base_z), keyed by ship model filename (lowercase,
+## no extension -- see convert_ships.py). Measured directly off each ALLSH.PRM-derived
+## .glb's own geometry: the tight cluster of vertices at the tail that share an edge
+## with 3+ triangles (the round nozzle rim), mirrored through the same rotate_y(PI)
+## set_ship_model() applies to the model itself. x/y are the ship-local nozzle offset;
+## base_z is the anchor point's ship-local Z plus 0.5 (see _engine_flame_base_z and
+## _update_engine_flame's scale/position formula). The 8 pilots share only 4 distinct
+## hulls (one per team), confirmed by identical bounding boxes and nozzle clusters
+## across teammates -- the generic EngineFlameLeft/Right transform in the .tscn is
+## just an average of these four, close enough for the placeholder box but visibly
+## off on some real hulls (e.g. AG Systems, whose nozzles sit noticeably narrower).
+const ENGINE_NOZZLE_OFFSETS := {
+	"sophia": Vector3(0.695, 0.192, 4.491), # FEISAR
+	"jacko": Vector3(0.695, 0.192, 4.491), # FEISAR
+	"chang": Vector3(0.516, 0.225, 4.406), # AG Systems
+	"dekka": Vector3(0.516, 0.225, 4.406), # AG Systems
+	"solaar": Vector3(0.592, 0.239, 4.444), # Qirex
+	"arian": Vector3(0.592, 0.239, 4.444), # Qirex
+	"anasta": Vector3(0.465, 0.329, 4.444), # Auricom
+	"arial": Vector3(0.465, 0.329, 4.444), # Auricom
+}
+
 # Wipeout-like defaults: strong track magnet, tight grip, quick yaw response,
 # with a grounded hover behavior that keeps the ship glued to the track instead of
 # behaving like a generic free-flying drone.
@@ -59,9 +81,12 @@ const NEUTRAL_INPUTS := {
 @export var engine_flame_speed_reference: float = 90.0 # speed (m/s) at which the speed-based stretch term reaches its full contribution
 @export var engine_flame_jitter: float = 0.15 # ported from ship.c's per-frame vec3_rand(7) plume jitter
 @export var engine_flame_glow_energy: float = 1.4 # peak OmniLight3D energy per nozzle at full thrust/speed, for a subtle light bounce onto the track under the ship
+@export var engine_trail_enabled: bool = false # toggles the trajectory-following trail ribbon on/off; the near-nozzle flame cones are unaffected
 @export var engine_trail_samples: int = 24 # length of the position history feeding each engine's trajectory-hugging trail ribbon (at the physics tick rate, ~this many frames of trail)
-@export var engine_trail_width: float = 0.16 # ribbon half-width at the nozzle end at full thrust/speed; tapers to 0 toward the tail
-@export var engine_trail_color: Color = Color(0.984314, 0.415686, 0.223529, 0.65) # warm orange-red streak color, alpha fades to 0 toward the tail
+@export var engine_trail_width: float = 0.09 # ribbon half-width at the nozzle end at full thrust/speed; tapers to 0 toward the tail
+@export var engine_trail_color: Color = Color(0.85098, 0.180392, 0.09804, 0.85) # saturated red-orange streak color, alpha fades to 0 toward the tail
+@export var engine_trail_material: Material # applied to the trail ribbon's freshly-rebuilt ArrayMesh every frame; set directly (not surface_material_override in the scene) since the mesh has 0 surfaces until first built, so get_surface_override_material(0) on it is out of bounds
+@export_range(0.0, 0.95) var engine_trail_fade_start: float = 0.6 # fraction of the trail (from the nozzle) that stays at full width/opacity before tapering to nothing at the tail -- a solid beam that only dissolves right at the tip, matching the reference look, instead of fading evenly over its whole length
 @export var resistance: float = 1.2 # ported from ship_player.c global drag: per-ship multiplier on acceleration -= velocity / resistance
 @export var max_resistance: float = 18.0 # velocity drag baseline, ported from SHIP_MAX_RESISTANCE (used identically on ground and in the air)
 @export var min_resistance: float = 6.5 # air grip divisor baseline, ported from SHIP_MIN_RESISTANCE: how strongly airborne velocity is pulled toward the forward axis
@@ -207,6 +232,12 @@ func _ready() -> void:
 		hull_area.area_entered.connect(_on_hull_area_entered)
 	if not engine_flames.is_empty() and engine_flames[0] != null:
 		_engine_flame_base_z = engine_flames[0].position.z
+	for trail_mesh in engine_trail_meshes:
+		if trail_mesh != null:
+			# top_level nodes render vertices as world-space; nail the transform to
+			# identity explicitly rather than trusting the scene's default, since
+			# _rebuild_engine_trail's vertices are already absolute world positions.
+			trail_mesh.global_transform = Transform3D.IDENTITY
 
 
 ## Godot-idiomatic stand-in for ship.c's `last_impact_time`-gated `sfx_play_at()`:
@@ -263,6 +294,22 @@ func set_ship_model(model_scene: PackedScene) -> void:
 	# around Y to match, otherwise the model faces backward on the track.
 	instance.rotate_y(PI)
 	ship_visual.add_child(instance)
+	_apply_engine_nozzle_offsets(model_scene)
+
+
+## Repositions EngineFlameLeft/Right onto this specific hull's actual nozzles
+## (see ENGINE_NOZZLE_OFFSETS) instead of leaving them at the .tscn's generic,
+## averaged-across-hulls placement.
+func _apply_engine_nozzle_offsets(model_scene: PackedScene) -> void:
+	if engine_flames.size() < 2 or engine_flames[0] == null or engine_flames[1] == null:
+		return
+	var key := model_scene.resource_path.get_file().get_basename().to_lower()
+	if not ENGINE_NOZZLE_OFFSETS.has(key):
+		return
+	var offset: Vector3 = ENGINE_NOZZLE_OFFSETS[key]
+	engine_flames[0].position = Vector3(-offset.x, offset.y, offset.z)
+	engine_flames[1].position = Vector3(offset.x, offset.y, offset.z)
+	_engine_flame_base_z = offset.z
 
 
 ## CameraRig has top_level = true so it doesn't inherit the ship's transform;
@@ -759,6 +806,13 @@ func _update_engine_flame() -> void:
 func _update_engine_trails() -> void:
 	if engine_flames.is_empty():
 		return
+	if not engine_trail_enabled:
+		for i in _engine_trail_history.size():
+			(_engine_trail_history[i] as Array).clear()
+		for trail_mesh in engine_trail_meshes:
+			if trail_mesh != null:
+				trail_mesh.mesh = null
+		return
 	var thrust_ratio := (thrust_mag / thrust_max) if thrust_max > 0.0 else 0.0
 	var speed_ratio := clampf(velocity.length() / engine_flame_speed_reference, 0.0, 1.0)
 	var intensity := clampf(0.2 + 0.8 * maxf(thrust_ratio, speed_ratio), 0.0, 1.0)
@@ -777,17 +831,20 @@ func _update_engine_trails() -> void:
 			_rebuild_engine_trail(history, engine_trail_meshes[i], engine_trail_width * intensity, cam)
 
 
-## Builds a camera-facing (screen-space) ribbon strip from a newest-first
-## history of world-space points, tapering width and alpha to 0 at the oldest
-## sample so the tail dissolves instead of ending in a hard edge.
+## Builds a camera-facing (screen-space) ribbon from a newest-first history of
+## world-space points, tapering width and alpha to 0 at the oldest sample so
+## the tail dissolves instead of ending in a hard edge. Emits explicit
+## triangles (two per segment) rather than a triangle strip -- one segment's
+## winding can't accidentally corrupt its neighbours.
 func _rebuild_engine_trail(history: Array, mesh_instance: MeshInstance3D, width: float, cam: Camera3D) -> void:
 	var count: int = history.size()
 	if count < 2 or width <= 0.001:
 		mesh_instance.mesh = null
 		return
 
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	var lefts: Array[Vector3] = []
+	var rights: Array[Vector3] = []
+	var colors: Array[Color] = []
 	for i in count:
 		var p: Vector3 = history[i]
 		var t := float(i) / float(count - 1)
@@ -804,13 +861,31 @@ func _rebuild_engine_trail(history: Array, mesh_instance: MeshInstance3D, width:
 		if side.length_squared() < 0.0001:
 			side = Vector3.RIGHT
 		side = side.normalized()
-		var half_width := width * (1.0 - t)
-		var col := Color(engine_trail_color.r, engine_trail_color.g, engine_trail_color.b, engine_trail_color.a * (1.0 - t))
-		st.set_color(col)
-		st.add_vertex(p + side * half_width)
-		st.set_color(col)
-		st.add_vertex(p - side * half_width)
+		var fade := clampf((1.0 - t) / maxf(1.0 - engine_trail_fade_start, 0.001), 0.0, 1.0)
+		var half_width := width * fade
+		lefts.append(p + side * half_width)
+		rights.append(p - side * half_width)
+		colors.append(Color(engine_trail_color.r, engine_trail_color.g, engine_trail_color.b, engine_trail_color.a * fade))
+
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in count - 1:
+		st.set_color(colors[i])
+		st.add_vertex(lefts[i])
+		st.set_color(colors[i])
+		st.add_vertex(rights[i])
+		st.set_color(colors[i + 1])
+		st.add_vertex(rights[i + 1])
+
+		st.set_color(colors[i])
+		st.add_vertex(lefts[i])
+		st.set_color(colors[i + 1])
+		st.add_vertex(rights[i + 1])
+		st.set_color(colors[i + 1])
+		st.add_vertex(lefts[i + 1])
 	mesh_instance.mesh = st.commit()
+	if engine_trail_material != null:
+		mesh_instance.set_surface_override_material(0, engine_trail_material)
 
 
 ## Ported from camera.c's camera_update_race_external(): the camera's raw chase

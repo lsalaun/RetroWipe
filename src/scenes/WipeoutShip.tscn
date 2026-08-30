@@ -68,13 +68,16 @@ shading_mode = 0
 cull_mode = 2
 vertex_color_use_as_albedo = true
 albedo_color = Color(1, 1, 1, 1)
-blend_mode = 1
+emission_enabled = true
+emission = Color(0.945098, 0.34902, 0.152941, 1)
+emission_energy_multiplier = 0.5
 
 [node name="WipeoutShip" type="Node3D"]
 script = ExtResource("1_script")
 handling = ExtResource("resource_handling")
 wall_impact_sound = ExtResource("2_crunch")
 ship_impact_sound = ExtResource("2_crunch")
+engine_trail_material = SubResource("StandardMaterial3D_trail")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("BoxShape3D_1")
@@ -133,12 +136,10 @@ shadow_enabled = false
 [node name="EngineTrailLeft" type="MeshInstance3D" parent="."]
 top_level = true
 cast_shadow = 0
-surface_material_override/0 = SubResource("StandardMaterial3D_trail")
 
 [node name="EngineTrailRight" type="MeshInstance3D" parent="."]
 top_level = true
 cast_shadow = 0
-surface_material_override/0 = SubResource("StandardMaterial3D_trail")
 
 [node name="Canopy" type="MeshInstance3D" parent="BodyMesh"]
 transform = Transform3D(0.8, 0, 0, 0, 1, 0, 0, 0, 0.35, 0, 0.22, 0.15)

@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://c85gqx0hk3vqd"]
+[gd_scene load_steps=13 format=3 uid="uid://c85gqx0hk3vqd"]
 
 [ext_resource type="Script" path="res://scripts/wipeout_ship_ai.gd" id="1_script"]
 [ext_resource type="AudioStream" uid="uid://6bu57uhxpfbw" path="res://assets/sfx/crunch.wav" id="2_crunch"]
@@ -29,10 +29,53 @@ size = Vector3(1, 0.18, 1.2)
 albedo_color = Color(0.301961, 0.301961, 0.301961, 1)
 roughness = 0.4
 
+[sub_resource type="CylinderMesh" id="CylinderMesh_flame_outer"]
+top_radius = 0.025
+bottom_radius = 0.2
+height = 1.0
+radial_segments = 20
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_flame_outer"]
+transparency = 1
+shading_mode = 0
+cull_mode = 2
+albedo_color = Color(0.803922, 0.478431, 0.211765, 0.32)
+emission_enabled = true
+emission = Color(0.803922, 0.478431, 0.211765, 1)
+emission_energy_multiplier = 0.45
+blend_mode = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_flame_inner"]
+top_radius = 0.012
+bottom_radius = 0.1
+height = 1.0
+radial_segments = 20
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_flame_inner"]
+transparency = 1
+shading_mode = 0
+cull_mode = 2
+albedo_color = Color(0.968627, 0.647059, 0.309804, 0.55)
+emission_enabled = true
+emission = Color(0.968627, 0.647059, 0.309804, 1)
+emission_energy_multiplier = 0.7
+blend_mode = 1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_trail"]
+transparency = 1
+shading_mode = 0
+cull_mode = 2
+vertex_color_use_as_albedo = true
+albedo_color = Color(1, 1, 1, 1)
+emission_enabled = true
+emission = Color(0.945098, 0.34902, 0.152941, 1)
+emission_energy_multiplier = 0.5
+
 [node name="WipeoutShipAI" type="Node3D"]
 script = ExtResource("1_script")
 wall_impact_sound = ExtResource("2_crunch")
 ship_impact_sound = ExtResource("2_crunch")
+engine_trail_material = SubResource("StandardMaterial3D_trail")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("BoxShape3D_1")
@@ -49,6 +92,52 @@ mesh = SubResource("BoxMesh_1")
 surface_material_override/0 = SubResource("StandardMaterial3D_1")
 
 [node name="ShipVisual" type="Node3D" parent="."]
+
+[node name="EngineFlameLeft" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, -0.58, 0.24, 4.35)
+
+[node name="Outer" type="MeshInstance3D" parent="EngineFlameLeft"]
+mesh = SubResource("CylinderMesh_flame_outer")
+cast_shadow = 0
+surface_material_override/0 = SubResource("StandardMaterial3D_flame_outer")
+
+[node name="Inner" type="MeshInstance3D" parent="EngineFlameLeft"]
+mesh = SubResource("CylinderMesh_flame_inner")
+cast_shadow = 0
+surface_material_override/0 = SubResource("StandardMaterial3D_flame_inner")
+
+[node name="Glow" type="OmniLight3D" parent="EngineFlameLeft"]
+light_color = Color(0.94902, 0.352941, 0.196078, 1)
+light_energy = 0.0
+omni_range = 2.5
+shadow_enabled = false
+
+[node name="EngineFlameRight" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0.58, 0.24, 4.35)
+
+[node name="Outer" type="MeshInstance3D" parent="EngineFlameRight"]
+mesh = SubResource("CylinderMesh_flame_outer")
+cast_shadow = 0
+surface_material_override/0 = SubResource("StandardMaterial3D_flame_outer")
+
+[node name="Inner" type="MeshInstance3D" parent="EngineFlameRight"]
+mesh = SubResource("CylinderMesh_flame_inner")
+cast_shadow = 0
+surface_material_override/0 = SubResource("StandardMaterial3D_flame_inner")
+
+[node name="Glow" type="OmniLight3D" parent="EngineFlameRight"]
+light_color = Color(0.94902, 0.352941, 0.196078, 1)
+light_energy = 0.0
+omni_range = 2.5
+shadow_enabled = false
+
+[node name="EngineTrailLeft" type="MeshInstance3D" parent="."]
+top_level = true
+cast_shadow = 0
+
+[node name="EngineTrailRight" type="MeshInstance3D" parent="."]
+top_level = true
+cast_shadow = 0
 
 [node name="Canopy" type="MeshInstance3D" parent="BodyMesh"]
 transform = Transform3D(0.8, 0, 0, 0, 1, 0, 0, 0, 0.35, 0, 0.22, 0.15)

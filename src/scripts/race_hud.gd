@@ -5,8 +5,8 @@ extends Control
 ## WRONG WAY warning and the optional FPS readout -- all drawn with the original
 ## DRFONTS bitmap font through WipeoutUI, at the layout coordinates hud.c uses.
 ##
-## The speedo lives in the Speedo child (hud_speedo.gd). Target reticle and
-## championship lives are not drawn yet.
+## The speedo lives in the Speedo child (hud_speedo.gd). The target reticle is
+## not drawn yet.
 ##
 ## hud.c positions everything in ui.c's virtual units and multiplies by the
 ## global ui_scale; HUD_SCALE plays that role here. 3.125 is the ratio the
@@ -25,7 +25,12 @@ const TOP_LEFT := Vector2(0.0, 0.0)
 const TOP_CENTER := Vector2(0.5, 0.0)
 const TOP_RIGHT := Vector2(1.0, 0.0)
 const BOTTOM_LEFT := Vector2(0.0, 1.0)
+const BOTTOM_RIGHT := Vector2(1.0, 1.0)
 const MIDDLE_CENTER := Vector2(0.5, 0.5)
+
+## hud.c's UI_ICON_STAR, one per remaining championship life: drfonts.cmp
+## frame 9 (ui.c's ui_load), a 12x12 icon.
+const STAR_ICON := "res://assets/ui/drfonts/drfonts_09.png"
 
 ## hud.c: render_push_2d() draws the WICONS sprite into a fixed 32x32
 ## (ui-scaled) box regardless of the source frame's own size.
@@ -35,7 +40,7 @@ const WEAPON_ICON_SIZE := 32.0
 
 var _ship: WipeoutShip = null
 var _director: RaceDirector = null
-var _weapon_icons: Dictionary = {}
+var _icon_cache: Dictionary = {}
 
 
 func _ready() -> void:
@@ -62,6 +67,7 @@ func _draw() -> void:
 	_draw_position()
 	_draw_lap_record()
 	_draw_weapon()
+	_draw_lives()
 	_draw_stats()
 	_draw_wrong_way()
 	_draw_countdown()
@@ -140,12 +146,33 @@ func _draw_weapon() -> void:
 	draw_texture_rect(texture, Rect2(top_left, Vector2(WEAPON_ICON_SIZE, WEAPON_ICON_SIZE) * HUD_SCALE), false)
 
 
+## hud.c: one star per remaining life, bottom-right, marching leftwards 13 units
+## apart from x = -26. Championship only -- a single race and a time trial have
+## no lives to spend.
+func _draw_lives() -> void:
+	if RaceSetup.race_type != RaceSetup.RACE_TYPE_CHAMPIONSHIP:
+		return
+	var texture := _star_icon()
+	if texture == null:
+		return
+	var icon_size := Vector2(texture.get_width(), texture.get_height())
+	for i in Championship.lives:
+		var top_left := _at(Vector2(-26.0 - 13.0 * float(i), -50.0), BOTTOM_RIGHT)
+		draw_texture_rect(texture, Rect2(top_left, icon_size * HUD_SCALE), false, DEFAULT)
+
+
+func _star_icon() -> Texture2D:
+	if not _icon_cache.has(STAR_ICON):
+		_icon_cache[STAR_ICON] = load(STAR_ICON) as Texture2D if ResourceLoader.exists(STAR_ICON) else null
+	return _icon_cache[STAR_ICON]
+
+
 ## wicons.cmp, exported by convert_textures.py as one PNG per frame.
 func _weapon_icon(weapon_type: int) -> Texture2D:
-	if not _weapon_icons.has(weapon_type):
+	if not _icon_cache.has(weapon_type):
 		var path := "res://assets/ui/wicons/wicons_%02d.png" % (weapon_type - 1)
-		_weapon_icons[weapon_type] = load(path) as Texture2D if ResourceLoader.exists(path) else null
-	return _weapon_icons[weapon_type]
+		_icon_cache[weapon_type] = load(path) as Texture2D if ResourceLoader.exists(path) else null
+	return _icon_cache[weapon_type]
 
 
 func _draw_wrong_way() -> void:

@@ -52,6 +52,19 @@ func _quit_confirm(data: int) -> void:
 		pop_page()
 
 
+## game_over_menu_init(): menu_reset() then a single page, so the stack cannot
+## be walked back into the race the run just ended -- the only way out is the
+## main menu.
+func show_game_over() -> void:
+	clear_pages()
+	var page := push_page("GAME OVER")
+	page.add_button(0, "CONTINUE", _game_over_continue)
+
+
+func _game_over_continue(_data: int) -> void:
+	_pause_menu().quit_to_main_menu()
+
+
 func _music(_data: int) -> void:
 	var page := push_page("MUSIC")
 	for i in GameAudio.MUSIC_NAMES.size():

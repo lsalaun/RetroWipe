@@ -27,6 +27,11 @@ var _results: Control = null
 var _orig_race_records: Dictionary = {}
 var _orig_highscores_name: String = ""
 var _orig_has_bonus_circuits: bool = false
+## _check_championship_flow() runs a campaign to its end, which unlocks the
+## Rapier class and writes it straight to user://settings.cfg -- without this
+## the validator would hand the developer a progression unlock they never
+## earned, and leave every later run starting from a different state.
+var _orig_has_rapier_class: bool = false
 
 
 func _initialize() -> void:
@@ -66,6 +71,7 @@ func _physics_process(_delta: float) -> bool:
 	_orig_race_records = _settings.race_records.duplicate(true)
 	_orig_highscores_name = _settings.highscores_name
 	_orig_has_bonus_circuits = _settings.has_bonus_circuits
+	_orig_has_rapier_class = _settings.has_rapier_class
 
 	_check_default_records()
 	_check_is_new_record()
@@ -77,6 +83,7 @@ func _physics_process(_delta: float) -> bool:
 	_settings.race_records = _orig_race_records
 	_settings.highscores_name = _orig_highscores_name
 	_settings.has_bonus_circuits = _orig_has_bonus_circuits
+	_settings.has_rapier_class = _orig_has_rapier_class
 	_settings.save()
 
 	if _failures.is_empty():

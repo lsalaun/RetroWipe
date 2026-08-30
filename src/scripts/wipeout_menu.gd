@@ -158,6 +158,14 @@ func reset_pages() -> void:
 	queue_redraw()
 
 
+## menu.c menu_reset() on its own, for the pages that reset the stack so it
+## *cannot* be walked back (game_over_menu_init, page_hall_of_fame_init: "Can't
+## go back!") and push their own replacement instead of _build()'s.
+func clear_pages() -> void:
+	_pages.clear()
+	queue_redraw()
+
+
 func current_page() -> Page:
 	if _pages.is_empty():
 		return null

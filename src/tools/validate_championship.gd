@@ -55,6 +55,8 @@ func _physics_process(_delta: float) -> bool:
 	_check_complete_championship()
 	_check_pilot_menu_start_circuit()
 	_check_race_class_gate()
+	_check_lives_spent_on_restart()
+	_check_pause_menu_game_over()
 
 	_settings.has_rapier_class = _orig_has_rapier_class
 	_settings.has_bonus_circuits = _orig_has_bonus_circuits
@@ -183,6 +185,66 @@ func _check_race_class_gate() -> void:
 	locked._select_class(_race_setup.RACE_CLASS_RAPIER)
 	_check("RAPIER CLASS is not selectable while locked", _race_setup.race_class == before)
 	locked.queue_free()
+
+
+## race.c race_restart() spends a life on *every* championship restart, not just
+## the qualify-again prompt: the pause menu's RESTART pays too, or the lives
+## system can be skipped by pausing instead of retrying. Checked against
+## Championship directly (driving PauseMenu itself would reload the race scene).
+func _check_lives_spent_on_restart() -> void:
+	_championship.reset()
+	var start_lives: int = _championship.lives
+	_check("a fresh championship starts on NUM_LIVES", start_lives == _championship.NUM_LIVES)
+
+	var out_of_lives: bool = _championship.lose_life()
+	_check("a restart costs one life", _championship.lives == start_lives - 1)
+	_check("lives remain after the first restart", not out_of_lives)
+
+	# Burn the rest: the last one has to report the run as over.
+	for i in start_lives - 2:
+		_check("still alive with %d lives left" % _championship.lives, not _championship.lose_life())
+	_check("the last life ends the run", _championship.lose_life())
+	_check("lives do not go negative into a fresh reset", _championship.lives <= 0)
+
+	# game_reset_championship() puts them all back for the next campaign.
+	_championship.reset()
+	_check("reset restores the full complement of lives", _championship.lives == _championship.NUM_LIVES)
+
+
+## The pause menu's own RESTART has to go through race_restart()'s life cost,
+## and spending the last one has to land on GAME OVER instead of reloading the
+## circuit. Driven through PauseMenu.restart_race() rather than show_game_over()
+## so the wiring between the two is what is actually under test; the run is set
+## up on its final life precisely because that branch returns before
+## TrackSelection.start_race() would change scene out from under the validator.
+func _check_pause_menu_game_over() -> void:
+	var packed := load("res://scenes/PauseMenu.tscn") as PackedScene
+	if packed == null:
+		_check("failed to load PauseMenu", false)
+		return
+	var pause_menu := packed.instantiate()
+	root.add_child(pause_menu)
+	var page = pause_menu.get_node_or_null("Menu")
+	if page == null or not page.has_method("show_game_over"):
+		_check("PauseMenu's page exposes show_game_over()", false)
+		pause_menu.queue_free()
+		return
+
+	_race_setup.race_type = _race_setup.RACE_TYPE_CHAMPIONSHIP
+	_championship.reset()
+	_championship.lives = 1 # on the last one, so RESTART ends the run here
+	pause_menu.restart_race()
+
+	_check("a pause-menu restart spends a championship life", _championship.lives == 0)
+	var current = page.current_page()
+	_check("spending the last life lands on GAME OVER", current != null and current.title == "GAME OVER")
+	_check("game over clears the stack, so back cannot resume the race", page.page_depth() == 1)
+
+	# The non-championship path is deliberately not driven here: it falls
+	# straight through to start_race(), which would change the running scene out
+	# from under the validator. The race_type guard in restart_race() is what
+	# keeps it out, and _draw_lives()'s own guard is checked the same way.
+	pause_menu.queue_free()
 
 
 func _check(what: String, ok: bool) -> void:

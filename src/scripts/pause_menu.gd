@@ -52,7 +52,14 @@ func resume() -> void:
 	get_tree().paused = false
 
 
+## race.c race_restart(): the life is spent by the restart itself, not by the
+## menu that asked for it, so a championship pays for a pause-menu RESTART just
+## as it does for the qualify-again prompt -- and the last one ends the run on
+## game_over_menu_init() instead of reloading the circuit.
 func restart_race() -> void:
+	if RaceSetup.race_type == RaceSetup.RACE_TYPE_CHAMPIONSHIP and Championship.lose_life():
+		menu.show_game_over()
+		return
 	get_tree().paused = false
 	TrackSelection.start_race(get_tree())
 

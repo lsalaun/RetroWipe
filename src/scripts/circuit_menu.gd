@@ -23,6 +23,12 @@ const BONUS_CIRCUIT := "FIRESTAR"
 const PREVIEW_POS := Vector2(0.0, -25.0)
 const PREVIEW_SIZE := Vector2(128.0, 74.0)
 
+## Blows the 128x74 asset up to fill more of the page, mirroring what
+## WipeoutMenu.MODEL_PREVIEW_SCALE does for the spinning model previews. Kept
+## an integer so the nearest canvas filter duplicates every source pixel evenly
+## instead of smearing the track art -- the layout scale is integer too.
+const PREVIEW_SCALE := 2.0
+
 ## TrackSelection.CIRCUIT_ORDER indices actually listed as buttons -- every
 ## circuit but FIRESTAR when it is still locked.
 var _listed_circuits: Array[int] = []
@@ -60,8 +66,9 @@ func _draw_preview(data: int, scale: float) -> void:
 	var texture := _previews[index]
 	if texture == null:
 		return
-	var top_left := _anchored(MIDDLE_CENTER, PREVIEW_POS - PREVIEW_SIZE * 0.5, scale)
-	draw_texture_rect(texture, Rect2(top_left, PREVIEW_SIZE * scale), false)
+	var scaled_size := PREVIEW_SIZE * PREVIEW_SCALE
+	var top_left := _anchored(MIDDLE_CENTER, PREVIEW_POS - scaled_size * 0.5, scale)
+	draw_texture_rect(texture, Rect2(top_left, scaled_size * scale), false)
 
 
 func _select_circuit(data: int) -> void:

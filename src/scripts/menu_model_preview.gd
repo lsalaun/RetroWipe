@@ -11,6 +11,7 @@ class_name MenuModelPreview
 ## radian per second of run time; ROTATION_SPEED mirrors that.
 
 const PREVIEW_SIZE := 128
+const MAX_RENDER_SIZE := 2048
 const ROTATION_SPEED := 1.0
 const FOV_DEGREES := 20.0
 const FIT_MARGIN := 1.35
@@ -33,6 +34,8 @@ func _init() -> void:
 	transparent_bg = true
 	own_world_3d = true
 	render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# Smooths the model silhouette, which a 1:1 blit would otherwise show raw.
+	msaa_3d = Viewport.MSAA_4X
 
 	_camera = Camera3D.new()
 	_camera.fov = FOV_DEGREES
@@ -75,6 +78,20 @@ func show_model(path: String) -> void:
 		return
 	_pivot.add_child(_current_model)
 	_frame_camera(_current_model)
+
+
+## Resizes the render target to the on-screen size the menu blits it at, so the
+## frame is sampled 1:1. The fixed 128x128 target used to be magnified ~6x by
+## draw_texture_rect() under the project's nearest canvas filter, which is what
+## made the spinning ship look blocky -- not the PSX textures themselves.
+## Camera framing is resolution-independent, so only the sampling changes.
+func set_render_size(pixels: Vector2i) -> void:
+	var wanted := Vector2i(
+		clampi(pixels.x, PREVIEW_SIZE, MAX_RENDER_SIZE),
+		clampi(pixels.y, PREVIEW_SIZE, MAX_RENDER_SIZE)
+	)
+	if wanted != size:
+		size = wanted
 
 
 func _frame_camera(model: Node3D) -> void:

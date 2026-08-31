@@ -307,7 +307,11 @@ func _draw_model_preview(preview: MenuModelPreview, anchor: Vector2, pos: Vector
 		return
 	var scaled_size := preview_size * MODEL_PREVIEW_SCALE
 	var top_left := _anchored(anchor, pos - scaled_size * 0.5, scale)
-	draw_texture_rect(preview.get_texture(), Rect2(top_left, scaled_size * scale), false)
+	var rect := Rect2(top_left, scaled_size * scale)
+	# Render the turntable at the size it lands on screen: the target is then
+	# sampled 1:1 and the project's nearest canvas filter has nothing to blow up.
+	preview.set_render_size(Vector2i(rect.size.ceil()))
+	draw_texture_rect(preview.get_texture(), rect, false)
 
 
 func _text(text: String, anchor: Vector2, offset: Vector2, size: int, color: Color, scale: float) -> void:

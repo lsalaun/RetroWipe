@@ -1,29 +1,28 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://h3kwk73p3saw"]
 
 [ext_resource type="PackedScene" uid="uid://byf18jtuse16t" path="res://assets/tracks/Track_01/Track_01_mesh.glb" id="1_mesh"]
 [ext_resource type="Script" uid="uid://b2qabxspa48k3" path="res://scripts/track_center_line.gd" id="2_script"]
 [ext_resource type="Script" uid="uid://b3xoy2a264go8" path="res://scripts/track_mesh_collider.gd" id="3_script"]
-[ext_resource type="PackedScene" path="res://assets/tracks/Track_01/Track_01_scene.glb" id="4_scene"]
-[ext_resource type="PackedScene" path="res://assets/tracks/Track_01/Track_01_sky.glb" id="5_sky"]
-[ext_resource type="Script" path="res://scripts/track_gameplay_zones.gd" id="6_script"]
+[ext_resource type="PackedScene" uid="uid://dbggnk3c8x8di" path="res://assets/tracks/Track_01/Track_01_scene.glb" id="4_scene"]
+[ext_resource type="PackedScene" uid="uid://bxopk2gk2r3uu" path="res://assets/tracks/Track_01/Track_01_sky.glb" id="5_sky"]
+[ext_resource type="Script" uid="uid://y6hkyiyv3clx" path="res://scripts/track_gameplay_zones.gd" id="6_script"]
 
-[node name="Track01" type="Node3D"]
+[node name="Track01" type="Node3D" unique_id=928350783]
 script = ExtResource("3_script")
 
-[node name="TrackMesh" parent="." instance=ExtResource("1_mesh")]
+[node name="TrackMesh" parent="." unique_id=616532100 instance=ExtResource("1_mesh")]
 
-[node name="Scenery" parent="." instance=ExtResource("4_scene")]
+[node name="Scenery" parent="." unique_id=2018546971 instance=ExtResource("4_scene")]
 
-[node name="Sky" parent="." instance=ExtResource("5_sky")]
+[node name="Sky" parent="." unique_id=46595598 instance=ExtResource("5_sky")]
 
-[node name="CenterLine" type="Path3D" parent="."]
+[node name="CenterLine" type="Path3D" parent="." unique_id=934580789]
 script = ExtResource("2_script")
 source_json = "res://assets/tracks/Track_01/track_01_curve.json"
 
-[node name="GameplayZones" type="Node3D" parent="."]
+[node name="GameplayZones" type="Node3D" parent="." unique_id=313790897]
 script = ExtResource("6_script")
 source_json = "res://assets/tracks/Track_01/track_01_face_flags.json"
 
-[node name="ShipSpawn" type="Marker3D" parent="."]
-transform = Transform3D(1.000000000000, 0.000000000000, 0.000000000000, 0.000000000000, 1.000000000000, 0.000000000000, 0.000000000000, 0.000000000000, 1.000000000000, -356.807511737089, 3.164319248826, 299.417840375587)
-
+[node name="ShipSpawn" type="Marker3D" parent="." unique_id=1790259955]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -356.80753, 3.1643193, 299.41785)

@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from circuit_catalog import CIRCUITS, folder_key, spawn_section_index
+from circuit_catalog import CIRCUITS, folder_key, sky_y_offset_meters, spawn_section_index
 from compute_ship_spawn import yaw_only_transform
 from psx_track_common import DEFAULT_UNITS_PER_METER
 
@@ -58,7 +58,7 @@ def copy_if_exists(src: Path, dest: Path) -> None:
     print(f"copied {src.name} -> {dest}")
 
 
-def write_track_scene(nn: str, dest: Path, spawn_literal: str) -> None:
+def write_track_scene(nn: str, dest: Path, spawn_literal: str, sky_y_offset: float) -> None:
     folder = f"Track_{nn}"
     node = f"Track{nn}"
     content = f"""[gd_scene format=3]
@@ -69,6 +69,7 @@ def write_track_scene(nn: str, dest: Path, spawn_literal: str) -> None:
 [ext_resource type="PackedScene" path="res://assets/tracks/{folder}/Track_{nn}_scene.glb" id="4_scene"]
 [ext_resource type="PackedScene" path="res://assets/tracks/{folder}/Track_{nn}_sky.glb" id="5_sky"]
 [ext_resource type="Script" path="res://scripts/track_gameplay_zones.gd" id="6_script"]
+[ext_resource type="Script" path="res://scripts/track_sky.gd" id="7_sky_script"]
 
 [node name="{node}" type="Node3D"]
 script = ExtResource("3_script")
@@ -78,6 +79,8 @@ script = ExtResource("3_script")
 [node name="Scenery" parent="." instance=ExtResource("4_scene")]
 
 [node name="Sky" parent="." instance=ExtResource("5_sky")]
+script = ExtResource("7_sky_script")
+sky_y_offset = {sky_y_offset}
 
 [node name="CenterLine" type="Path3D" parent="."]
 script = ExtResource("2_script")
@@ -198,7 +201,7 @@ def main() -> None:
         if scene_path.exists() and not args.overwrite_scene:
             print(f"scene exists, not overwriting: {scene_path} (pass --overwrite-scene)")
         else:
-            write_track_scene(nn, scene_path, spawn_literal)
+            write_track_scene(nn, scene_path, spawn_literal, sky_y_offset_meters(folder, args.units_per_meter))
 
     if args.godot_import:
         godot = args.godot_bin

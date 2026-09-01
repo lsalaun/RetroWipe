@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://bl5kvpr63fcdg" path="res://assets/tracks/Track_10/Track_10_scene.glb" id="4_scene"]
 [ext_resource type="PackedScene" uid="uid://ca6prycpu5trn" path="res://assets/tracks/Track_10/Track_10_sky.glb" id="5_sky"]
 [ext_resource type="Script" uid="uid://y6hkyiyv3clx" path="res://scripts/track_gameplay_zones.gd" id="6_script"]
+[ext_resource type="Script" path="res://scripts/track_sky.gd" id="7_sky_script"]
 
 [node name="Track10" type="Node3D"]
 script = ExtResource("3_script")
@@ -15,6 +16,8 @@ script = ExtResource("3_script")
 [node name="Scenery" parent="." instance=ExtResource("4_scene")]
 
 [node name="Sky" parent="." instance=ExtResource("5_sky")]
+script = ExtResource("7_sky_script")
+sky_y_offset = 0.0
 
 [node name="CenterLine" type="Path3D" parent="."]
 script = ExtResource("2_script")

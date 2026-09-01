@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dlmult6hulf5w"
-path="res://.godot/imported/arial_tex_39.png-87d9f3d246de2dc7f97a75fd88ddd00a.ctex"
+path.s3tc="res://.godot/imported/arial_tex_39.png-87d9f3d246de2dc7f97a75fd88ddd00a.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "6e7cfa3d7012f203eb5b2123451aec2a"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/ships/arial/arial_tex_39.png"
-dest_files=["res://.godot/imported/arial_tex_39.png-87d9f3d246de2dc7f97a75fd88ddd00a.ctex"]
+dest_files=["res://.godot/imported/arial_tex_39.png-87d9f3d246de2dc7f97a75fd88ddd00a.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +41,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0

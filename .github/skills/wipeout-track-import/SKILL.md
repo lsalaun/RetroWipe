@@ -1,6 +1,6 @@
 ---
 name: wipeout-track-import
-description: "Import a Wipeout PSX circuit into the Godot port via import_track.py (TRACK.TRV/TRF/TRS, LIBRARY.CMP/TTF, SCENE/SKY PRM+CMP → GLB, curve JSON, face flags, TrackNN.tscn, ShipSpawn at start_line_pos-15, headless validation). Use when: importing a track, converting TRACKNN, PSX→Godot pipeline, import_track.py, circuit_catalog, compute_ship_spawn, convert_track_geometry/sections/scenery/face_flags, Blender convert_track_mesh, export_track_curve, CenterLine, GameplayZones, inspect_scene, validate_track_side_walls, validate_ai_field."
+description: "Import a Wipeout PSX circuit into the Godot port via import_track.py (TRACK.TRV/TRF/TRS, LIBRARY.CMP/TTF, SCENE/SKY PRM+CMP → GLB, curve JSON, face flags, TrackNN.tscn, ShipSpawn at start_line_pos-15, headless validation). Use when: importing a track, converting TRACKNN, PSX→Godot pipeline, import_track.py, circuit_catalog, compute_ship_spawn, convert_track_geometry/sections/scenery/face_flags, Blender convert_track_mesh, export_track_curve, CenterLine, GameplayZones, Sky dome / track_sky.gd / sky_y_offset, inspect_scene, validate_track_side_walls, validate_ai_field."
 argument-hint: TRACKNN or circuit name (e.g. TRACK03, Altima)
 ---
 
@@ -86,7 +86,8 @@ Identify the circuit with `circuit_catalog.py` (`def.circuits`), **not** `TRACK.
 7. After copying new `.glb`, run Godot `--import` **before** writing `ext_resource` UIDs. Stale UID in `.tscn` still resolves the old asset even if `path=` was updated. Read `uid://` from `*.glb.import`. `--write-scene` emits **no** UIDs; fill them after import.
 8. Headless validators must `quit()` themselves (stdout is fully buffered). Do not kill the process. Do not run two validators in parallel on the same project. Reads that depend on `_ready()` (e.g. `CenterLine.curve`) wait 2–3 `physics_frame`s; `_initialize()` is too early. Scripts must `extends SceneTree`, not `Node`.
 9. Overwrite GLB/JSON deliverables **in place** (same filename) so existing UID / `.import` files stay valid. Do **not** pass `--overwrite-scene` on Track01–14 unless the user explicitly asked to rewrite the `.tscn`.
-10. `ShipSpawn` index is `start_line_pos - 15` from `circuit_catalog.py` / `game.c`, **not** JSON point 0. Print the literal with `compute_ship_spawn.py` (or the orchestrator stdout). First reproduce Track01's published transform from *its* JSON (`index=12`) before trusting a new track.
+10. **The `Sky` node is not a world object.** `scene.c` re-centres `SKY.PRM` on the camera every frame and draws it first with depth writing off. A bare GLB instance at the track origin is the "sky buried in the hills" bug: the dome is only ~314 m in radius against a >1200 m circuit. `track_sky.gd` + `track_sky.gdshader` restore that; `--write-scene` emits them. Never strip them to "simplify" a scene.
+11. `ShipSpawn` index is `start_line_pos - 15` from `circuit_catalog.py` / `game.c`, **not** JSON point 0. Print the literal with `compute_ship_spawn.py` (or the orchestrator stdout). First reproduce Track01's published transform from *its* JSON (`index=12`) before trusting a new track.
 
 Full gotcha list: [gotchas.md](./references/gotchas.md).
 
@@ -125,30 +126,36 @@ When the AI line is **not** from `TRACK.TRS` (Track12 pattern). [pipeline-blende
 TrackNN (Node3D + TrackMeshCollider)
 ├── TrackMesh       instance Track_NN_mesh.glb
 ├── Scenery         instance Track_NN_scene.glb   (visual only)
-├── Sky             instance Track_NN_sky.glb     (visual only)
+├── Sky             instance Track_NN_sky.glb + track_sky.gd
+│                   sky_y_offset = <metres, from circuit_catalog.py>
 ├── CenterLine      Path3D + track_center_line.gd
 │                   source_json = res://assets/tracks/Track_NN/track_NN_curve.json
 ├── GameplayZones   Node3D + track_gameplay_zones.gd
 │                   source_json = res://assets/tracks/Track_NN/track_NN_face_flags.json
 └── ShipSpawn       Marker3D
-```Orchestrator (or equivalent) used `--flip-z` **and** the same `--units-per-meter` on all converters
+```
+
+## Done when
+
+- [ ] Orchestrator (or equivalent) used `--flip-z` **and** the same `--units-per-meter` on all converters
 - [ ] Three separate GLBs (mesh / scene / sky), not one combined file
 - [ ] Curve JSON `closed: true` (or documented why not); not an empty glTF curve
 - [ ] Assets in `godot/src/assets/tracks/Track_NN/` with matching `.import` UIDs in the `.tscn`
 - [ ] Scene tree matches Track01/Track02; collider only on TrackMesh; trimesh + backface
 - [ ] `ShipSpawn` at `start_line_pos - 15`, yaw-only, `basis.y = (0,1,0)`, row-major literal, ≥12 decimals
+- [ ] `Sky` node carries `track_sky.gd` and the circuit's `sky_y_offset` (never a bare GLB instance)
 - [ ] Existing Track01–14 `.tscn` not overwritten unless the user asked
 - [ ] `inspect_scene.gd` on GLBs: MeshInstance3D, surfaces > 0, non-zero AABB
 - [ ] After wiring into `main.tscn`: alignment inspect; side-wall validator if edge shelves; `validate_ai_field.gd` if this is the race track
 
-## Known out of scope (do not "fix" during import)
+## Visual checks
 
-Section `jump`/junction flags unused in Godot; weapon pads are markers only; boost is a one-shot Area3D impulse; no per-circuit `sky_y_offset`; scenery/sky have no collider and no auto `CULL_DISABLED`; PRM billboards/lights/splines parsed not meshed; scale 106.5 is an estimate (~3.2× vs elevation cross-check, unresolved). Headless cannot screenshot (`get_viewport().get_texture()` is null).
-
-Not this skill: `ALLSH`/`ALCOL`, `wipeout/TEXTURES`, `WIPEOUT.VB` / music MP3, COMMON weapons/droid/menu (`import_ships.py`, `convert_textures.py`, `import_audio.py`, `convert_common.py`
-- [ ] `inspect_scene.gd` on GLBs: MeshInstance3D, surfaces > 0, non-zero AABB
-- [ ] After wiring into `main.tscn`: alignment inspect; side-wall validator if edge shelves; `validate_ai_field.gd` if this is the race track
+`--headless` cannot render (dummy driver, `get_viewport().get_texture()` is null), but the same `-s` script **without** `--headless` opens a window and `root.get_texture().get_image().save_png()` works. That is the only way to confirm anything visual — sky, culling, alignment. Recipe in [validation.md](./references/validation.md).
 
 ## Known out of scope (do not "fix" during import)
 
-Section `jump`/junction flags unused in Godot; weapon pads are markers only; boost is a one-shot Area3D impulse; no per-circuit `sky_y_offset`; scenery/sky have no collider and no auto `CULL_DISABLED`; PRM billboards/lights/splines parsed not meshed; scale 106.5 is an estimate (~3.2× vs elevation cross-check, unresolved). Headless cannot screenshot (`get_viewport().get_texture()` is null).
+Section `jump`/junction flags unused in Godot; weapon pads are markers only; boost is a one-shot Area3D impulse; scenery and sky have no collider and no auto `CULL_DISABLED`; PRM billboards/lights/splines parsed not meshed; scale 106.5 is an estimate (~3.2× vs elevation cross-check, unresolved).
+
+Per-circuit `sky_y_offset` **is** wired now (`circuit_catalog.py` → `sky_y_offset_meters()` → `--write-scene`); it is no longer a known gap. See `docs/.transactional/26-09-01-01/tickets/`.
+
+Not this skill: `ALLSH`/`ALCOL`, `wipeout/TEXTURES`, `WIPEOUT.VB` / music MP3, COMMON weapons/droid/menu (`import_ships.py`, `convert_textures.py`, `import_audio.py`, `convert_common.py`) — see **wipeout-asset-import**.

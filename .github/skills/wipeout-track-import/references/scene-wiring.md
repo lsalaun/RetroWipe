@@ -8,7 +8,8 @@ Reference scenes: `godot/src/scenes/Track01.tscn`, `Track02.tscn`. New circuits 
 TrackNN (Node3D + TrackMeshCollider)
 ├── TrackMesh          instance of Track_NN_mesh.glb
 ├── Scenery            instance of Track_NN_scene.glb   (visual only)
-├── Sky                instance of Track_NN_sky.glb     (visual only)
+├── Sky                instance of Track_NN_sky.glb + track_sky.gd
+│                      sky_y_offset = <metres, from circuit_catalog.py>
 ├── CenterLine         Path3D + track_center_line.gd
 │                      source_json = res://assets/tracks/Track_NN/track_NN_curve.json
 ├── GameplayZones      Node3D + track_gameplay_zones.gd
@@ -26,10 +27,48 @@ UIDs in `ext_resource` must match `*.glb.import` **after** `godot --headless --p
 | --- | --- |
 | `godot/src/scripts/track_center_line.gd` | Loads curve JSON into Path3D / Curve3D in `_ready()`. If Curve3D already populated in editor, JSON is not re-read. |
 | `godot/src/scripts/track_mesh_collider.gd` | Only `TrackMesh` (`track_mesh_path` default). Per MeshInstance3D: StaticBody3D + CollisionShape3D via `create_trimesh_shape()`, `shape.backface_collision = true`, materials duplicated with `CULL_DISABLED`. |
+| `godot/src/scripts/track_sky.gd` | Only `Sky`. Re-centres the dome on the active camera every frame (+ `sky_y_offset`), kills its shadow casting, and swaps the imported materials for `res://shaders/track_sky.gdshader`. |
 | `godot/src/scripts/track_gameplay_zones.gd` | `_ready()`: `boost_pads` → TrackBoostPad Area3D (one-shot impulse); `pickup_pads` / `start_grid` → Marker3D (anchors only). |
 | `godot/src/scripts/track_boost_pad.gd` | Speed impulse on pad contact. |
 
 Never convex-decompose edge shelves / side walls: inflated hulls false-trigger wall contacts in the lane.
+
+## Sky — camera-relative backdrop, not a world object
+
+`SKY.PRM` is never placed in the world. `scene.c`'s `scene_draw()` re-centres it on
+the camera each frame and draws it **first** with depth writing off:
+
+```c
+render_set_depth_write(false);
+mat4_set_translation(&sky_object->mat, vec3_add(camera->position, sky_offset));
+object_draw(sky_object, &sky_object->mat);
+render_set_depth_write(true);
+```
+
+Instanced as a bare GLB the dome sits at the track origin and reads as a blue
+faceted shell embedded in the terrain — Track01's dome is ~314 m in radius
+against a circuit spanning >1200 m, so it also vanishes from view on the far
+half of the track. `track_sky.gd` restores the per-frame re-centring;
+`track_sky.gdshader` restores the depth behaviour.
+
+`godot/src/shaders/track_sky.gdshader` is `unshaded, depth_draw_never` plus
+`POSITION.z = POSITION.w * 1e-5` in `vertex()`. Godot has no way to force an
+opaque mesh to the head of the draw list (`render_priority` only sorts
+transparent materials), so instead the dome's clip-space depth is flattened onto
+the far plane — same result as "drawn first, no depth write", and independent of
+draw order. Godot 4 uses a **reversed-Z** buffer (NDC z = 1.0 near, 0.0 far);
+that `1e-5` sits just short of the far plane so the fragments still pass a depth
+test against a buffer cleared to the far value. Do not "fix" it to `1.0`.
+
+`sky_y_offset` is the per-circuit `game.c` value (raw PSX units, Y **down**),
+negated then divided by `--units-per-meter`. Do not read it from the scene: use
+`circuit_catalog.py`'s `sky_y_offset_meters(folder, units_per_meter)`, which
+`import_track.py --write-scene` already calls.
+
+The dome is also unlit and casts no shadow. If a sky ever looks lit or drops a
+shadow across the circuit, the `ShaderMaterial` swap did not run — check whether
+the scene was rendered headless (`track_sky.gd` skips the swap there, the dummy
+renderer having no shader compiler).
 
 ## ShipSpawn — TRS curves (`convert_track_sections.py`)
 
